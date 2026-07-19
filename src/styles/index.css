@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+/* 도화지 디자인 토큰 (CLAUDE.md 디자인 토큰 절 참조) */
+@theme {
+  --color-paper: #fdfcf7;
+  --color-ink: #3b3733;
+  --color-pink: #e8637c;
+  --color-green: #8cab68;
+  --color-sky: #9ec3d8;
+  --color-yellow: #f2c14e;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
