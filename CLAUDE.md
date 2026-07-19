@@ -31,7 +31,7 @@
 ### M0 — 기반
 - 레포 구조(tech-design §9), CI(lint·typecheck·build), Vercel 연동.
 - Supabase 마이그레이션(스키마 전체, tech-design §4) + RLS 정책 + seed(sigungu 229, questions 730 — questions는 생성 후 사용자 검수 요청).
-- 카카오 OAuth 로그인, 커플 연결(초대 코드 발급/입력, pending→active).
+- 인증 (Phase 0 조사 결과 반영, docs/spike-result.md §4): 앱인토스 채널은 **토스 로그인**(`appLogin()`→userKey, mTLS 토큰 교환)↔자체 계정 매핑 레이어(tech-design §12-1), 웹/네이티브 채널은 카카오 OAuth. 커플 연결(초대 코드 발급/입력, pending→active).
 - DoD: 두 계정으로 커플 연결이 실기기 브라우저에서 성공.
 
 ### M1 — 지도
