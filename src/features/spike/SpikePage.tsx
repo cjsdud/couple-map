@@ -125,7 +125,7 @@ const STATUS_UI: Record<Status, { label: string; cls: string }> = {
   fail: { label: '실패', cls: 'bg-pink text-white' },
 };
 
-export default function App() {
+export default function SpikePage() {
   const [results, setResults] = useState<Record<CheckKey, CheckResult>>({
     supabase: { status: 'running', detail: '' },
     kakao: { status: 'running', detail: '' },
