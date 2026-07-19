@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../shared/lib/supabase';
 
-export const SIGUNGU_TOTAL = 229;
+/**
+ * 정복 단위 수. 기획 명세는 229였으나 2026-07-01 행정구역 개편(인천 2군 9구)으로
+ * 230이 현행 기준 — docs/spike-result.md 참조. 시드(supabase/seed/sigungu.sql)와 동기 유지.
+ */
+export const SIGUNGU_TOTAL = 230;
 
 /**
  * 정복 현황: status='visited' 기록의 스팟이 가진 시군구 코드 집합.
@@ -14,7 +18,7 @@ export function useConquest() {
     queryFn: async (): Promise<Record<string, number>> => {
       // ?mock=1 — 디자인 확인용 데모 데이터 (Supabase 연결과 무관하게 동작)
       if (new URLSearchParams(window.location.search).has('mock')) {
-        return { '11010': 1, '11250': 2, '31010': 3, '31100': 1, '32050': 5, '39010': 2, '21090': 1, '35010': 4 };
+        return { '11110': 1, '11680': 2, '41110': 3, '41590': 1, '51110': 5, '50110': 2, '26350': 1, '52110': 4 };
       }
       if (!supabase) return {};
       const { data: rows, error } = await supabase
