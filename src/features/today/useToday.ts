@@ -5,7 +5,7 @@ import { prepareUpload } from '../../shared/lib/image';
 import { supabase } from '../../shared/lib/supabase';
 import { useCoupleState } from '../couple/useCoupleState';
 
-/** daily_entries_unlocked 뷰 행 — answer 상호 잠금은 DB가 강제 (0002_rls.sql) */
+/** daily_entries_unlocked 뷰 행 — answer 상호 잠금은 DB가 강제 (0002_rls.sql, 0008_daily_note.sql) */
 export interface DailyEntry {
   id: string;
   couple_id: string;
@@ -16,6 +16,8 @@ export interface DailyEntry {
   /** 잠겨 있으면 null — has_answer로 "먼저 답했는지"만 알 수 있다 */
   answer: string | null;
   has_answer: boolean;
+  /** 한 줄 일기 — 기분처럼 짝꿍에게 바로 보인다 (질문 답만 양방 잠금) */
+  note: string | null;
 }
 
 export interface DailyPhoto {
@@ -120,30 +122,26 @@ export function useUploadPhoto(ctx: { coupleId?: string; userId?: string; entryD
       if (error) throw error;
     },
     onSuccess: () => {
+      // 사진은 잔디 인정 요소가 아니므로 grass/streak 무효화는 불필요
       void queryClient.invalidateQueries({ queryKey: ['daily-entries'] });
       void queryClient.invalidateQueries({ queryKey: ['daily-photos'] });
-      void queryClient.invalidateQueries({ queryKey: ['grass'] });
     },
   });
 }
 
-export function useSetMood(ctx: { coupleId?: string; userId?: string; entryDate: string }) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (mood: string) => {
-      if (!supabase || !ctx.coupleId || !ctx.userId) throw new Error('Supabase 연결 후 남길 수 있어요');
-      const entryId = await ensureMyEntry(ctx.coupleId, ctx.userId, ctx.entryDate, null);
-      const { error } = await supabase.from('daily_entries').update({ mood }).eq('id', entryId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['daily-entries'] });
-      void queryClient.invalidateQueries({ queryKey: ['grass'] });
-    },
-  });
+/** 통합 작성 카드의 입력값 — 세 항목 전부 선택 사항, 하나 이상 채우면 저장 */
+export interface TodayDraft {
+  mood: string | null;
+  answer: string;
+  note: string;
 }
 
-export function useSetAnswer(ctx: {
+/**
+ * 오늘 통합 저장: 기분·질문 답·한 줄 일기를 daily_entries 1행에 한 번에.
+ * answer는 컬럼 권한 체계(select 제외 컬럼) 특성상 insert-with-answer가 아닌
+ * ensureMyEntry(upsert) → update 경로로만 쓴다.
+ */
+export function useSaveToday(ctx: {
   coupleId?: string;
   userId?: string;
   entryDate: string;
@@ -151,38 +149,87 @@ export function useSetAnswer(ctx: {
 }) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (answer: string) => {
-      if (!supabase || !ctx.coupleId || !ctx.userId) throw new Error('Supabase 연결 후 답할 수 있어요');
-      const entryId = await ensureMyEntry(ctx.coupleId, ctx.userId, ctx.entryDate, ctx.questionId);
-      const { error } = await supabase
-        .from('daily_entries')
-        .update({ answer: answer.trim(), question_id: ctx.questionId })
-        .eq('id', entryId);
+    mutationFn: async ({ mood, answer, note }: TodayDraft) => {
+      if (!supabase || !ctx.coupleId || !ctx.userId) throw new Error('Supabase 연결 후 남길 수 있어요');
+      const patch: { mood?: string; answer?: string; question_id?: number | null; note?: string } = {};
+      if (mood) patch.mood = mood;
+      if (answer.trim()) {
+        patch.answer = answer.trim();
+        patch.question_id = ctx.questionId;
+      }
+      if (note.trim()) patch.note = note.trim();
+      if (Object.keys(patch).length === 0) throw new Error('기분·답·일기 중 하나는 채워 주세요');
+      const entryId = await ensureMyEntry(
+        ctx.coupleId,
+        ctx.userId,
+        ctx.entryDate,
+        answer.trim() ? ctx.questionId : null,
+      );
+      const { error } = await supabase.from('daily_entries').update(patch).eq('id', entryId);
       if (error) throw error;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['daily-entries'] });
       void queryClient.invalidateQueries({ queryKey: ['grass'] });
+      void queryClient.invalidateQueries({ queryKey: ['streak'] });
     },
   });
 }
 
-/** 오늘의 질문: 사귄 D+ 기반 day_index (started_at 없으면 연중 일수로 폴백), 730 순환 */
+/** 사귄 D+ 기반 day_index (started_at 없으면 연중 일수로 폴백), 730 순환 */
+function questionDayIndex(startedAt: string | null, entryDate: string): number {
+  const base = startedAt ? new Date(`${startedAt}T12:00:00`) : new Date(`${entryDate.slice(0, 4)}-01-01T12:00:00`);
+  const today = new Date(`${entryDate}T12:00:00`);
+  const diff = Math.max(0, Math.floor((today.getTime() - base.getTime()) / 86_400_000));
+  return (diff % 730) + 1;
+}
+
+const MOCK_QUESTION_TEXT = '요즘 짝꿍 덕분에 새로 좋아하게 된 게 있나요?';
+
+/** 오늘의 질문 */
 export function useQuestionOfDay(startedAt: string | null, entryDate: string) {
   return useQuery({
     queryKey: ['question', startedAt, entryDate],
     queryFn: async (): Promise<{ id: number; text: string } | null> => {
-      const base = startedAt ? new Date(`${startedAt}T12:00:00`) : new Date(`${entryDate.slice(0, 4)}-01-01T12:00:00`);
-      const today = new Date(`${entryDate}T12:00:00`);
-      const diff = Math.max(0, Math.floor((today.getTime() - base.getTime()) / 86_400_000));
-      const dayIndex = (diff % 730) + 1;
+      const dayIndex = questionDayIndex(startedAt, entryDate);
       if (isMock() || !supabase) {
-        return { id: dayIndex, text: '요즘 짝꿍 덕분에 새로 좋아하게 된 게 있나요?' };
+        return { id: dayIndex, text: MOCK_QUESTION_TEXT };
       }
       const { data, error } = await supabase
         .from('questions')
         .select('id, text')
         .eq('day_index', dayIndex)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+/**
+ * 지난 날짜의 질문 텍스트 (잔디 상세 시트용).
+ * 그날 누군가 답했으면 저장된 question_id가 정답, 아니면 day_index로 재계산.
+ */
+export function useDayQuestion(startedAt: string | null, date: string, questionId: number | null) {
+  return useQuery({
+    queryKey: ['day-question', startedAt, date, questionId],
+    queryFn: async (): Promise<{ id: number; text: string } | null> => {
+      if (isMock() || !supabase) {
+        return { id: questionId ?? questionDayIndex(startedAt, date), text: MOCK_QUESTION_TEXT };
+      }
+      if (questionId !== null) {
+        const { data, error } = await supabase
+          .from('questions')
+          .select('id, text')
+          .eq('id', questionId)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) return data;
+      }
+      const { data, error } = await supabase
+        .from('questions')
+        .select('id, text')
+        .eq('day_index', questionDayIndex(startedAt, date))
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -202,16 +249,22 @@ export interface DailyDaySummary {
   photoCount: number;
   moods: string[];
   answeredCount: number;
+  /** 한 줄 일기 남긴 사람 수 (타임라인 '오늘' 행 표기용) */
+  noteCount: number;
 }
 
+/**
+ * 타임라인 '오늘 기록' 요약. 사진만 있는 날도 행은 표시한다 —
+ * 사진은 자유 요소라 잔디 인정(기분·질문 답)과는 별개지만, 기록 자체는 남기 때문.
+ */
 export function useDailyTimeline(coupleId: string | undefined, entryDate: string) {
   return useQuery({
     queryKey: ['daily-timeline', coupleId, entryDate],
     queryFn: async (): Promise<DailyDaySummary[]> => {
       if (isMock()) {
         return [
-          { date: '2026-07-19', photoCount: 3, moods: ['🥰', '😊'], answeredCount: 2 },
-          { date: '2026-07-13', photoCount: 1, moods: ['😴'], answeredCount: 1 },
+          { date: '2026-07-19', photoCount: 3, moods: ['🥰', '😊'], answeredCount: 2, noteCount: 2 },
+          { date: '2026-07-13', photoCount: 1, moods: ['😴'], answeredCount: 1, noteCount: 1 },
         ];
       }
       if (!supabase || !coupleId) return [];
@@ -219,7 +272,7 @@ export function useDailyTimeline(coupleId: string | undefined, entryDate: string
       const [{ data: entries, error }, { data: photoRows, error: photoError }] = await Promise.all([
         supabase
           .from('daily_entries_unlocked')
-          .select('id, entry_date, mood, has_answer')
+          .select('id, entry_date, mood, has_answer, note')
           .gte('entry_date', from)
           .lte('entry_date', entryDate),
         supabase.from('daily_photos').select('entry_id'),
@@ -230,14 +283,17 @@ export function useDailyTimeline(coupleId: string | undefined, entryDate: string
       for (const p of photoRows ?? [])
         photoCountByEntry.set(p.entry_id as string, (photoCountByEntry.get(p.entry_id as string) ?? 0) + 1);
       const byDate = new Map<string, DailyDaySummary>();
-      for (const e of (entries ?? []) as { id: string; entry_date: string; mood: string | null; has_answer: boolean }[]) {
-        const s = byDate.get(e.entry_date) ?? { date: e.entry_date, photoCount: 0, moods: [], answeredCount: 0 };
+      for (const e of (entries ?? []) as { id: string; entry_date: string; mood: string | null; has_answer: boolean; note: string | null }[]) {
+        const s = byDate.get(e.entry_date) ?? { date: e.entry_date, photoCount: 0, moods: [], answeredCount: 0, noteCount: 0 };
         s.photoCount += photoCountByEntry.get(e.id) ?? 0;
         if (e.mood) s.moods.push(e.mood);
         if (e.has_answer) s.answeredCount += 1;
+        if (e.note) s.noteCount += 1;
         byDate.set(e.entry_date, s);
       }
-      return [...byDate.values()].filter((s) => s.photoCount + s.moods.length + s.answeredCount > 0);
+      return [...byDate.values()].filter(
+        (s) => s.photoCount + s.moods.length + s.answeredCount + s.noteCount > 0,
+      );
     },
   });
 }
@@ -245,51 +301,166 @@ export function useDailyTimeline(coupleId: string | undefined, entryDate: string
 const MOCK_GRASS_FILLED = [1, 2, 3, 5, 6, 8, 11, 12, 13, 14, 15, 17, 18];
 const MOCK_GRASS_HALF = [4, 9, 16];
 
+/** 목 잔디: 현재 월만 채워 둔다 (월 이동 데모에서 다른 달은 빈 그리드) */
+function mockGrassMonth(year: number, month: number): GrassDay[] {
+  const now = new Date();
+  if (year !== now.getFullYear() || month !== now.getMonth() + 1) return [];
+  const days: GrassDay[] = [
+    ...MOCK_GRASS_FILLED.map((d) => ({
+      date: toDateString(new Date(year, month - 1, d)),
+      level: 'both' as const,
+    })),
+    ...MOCK_GRASS_HALF.map((d) => ({
+      date: toDateString(new Date(year, month - 1, d)),
+      level: 'one' as const,
+    })),
+  ];
+  // 데모 일관성: 오늘 카드가 '저장 후' 상태이므로 오늘(같은 달의 어제 포함)도 채워 보여준다
+  const today = now.getDate();
+  for (const d of [today - 1, today]) {
+    if (d >= 1 && !MOCK_GRASS_FILLED.includes(d) && !MOCK_GRASS_HALF.includes(d)) {
+      days.push({ date: toDateString(new Date(year, month - 1, d)), level: 'both' });
+    }
+  }
+  return days;
+}
+
 /**
- * 잔디 데이터: 최근 62일 참여 현황 (이번 달 그리드 + 스트릭 계산 겸용).
- * 채움 = 사진·질문·기분 중 1+ (tech-design §4).
+ * 기간 내 일자별 참여 현황.
+ * 참여 인정 = 기분·질문 답·한 줄 일기 중 1+ — 사진은 자유 요소라 인정하지 않는다.
+ * (사진 상호 잠금 규칙과는 무관 — 잠금은 RLS가 계속 강제한다.)
  */
-export function useGrass(coupleId: string | undefined, entryDate: string) {
+async function fetchParticipation(from: string, to: string): Promise<GrassDay[]> {
+  if (!supabase) return [];
+  const { data: entries, error } = await supabase
+    .from('daily_entries_unlocked')
+    .select('user_id, entry_date, mood, has_answer, note')
+    .gte('entry_date', from)
+    .lte('entry_date', to);
+  if (error) throw error;
+  const byDate = new Map<string, Set<string>>();
+  const rows = (entries ?? []) as Pick<DailyEntry, 'user_id' | 'entry_date' | 'mood' | 'has_answer' | 'note'>[];
+  for (const e of rows) {
+    const participated = e.mood !== null || e.has_answer || e.note !== null;
+    if (!participated) continue;
+    if (!byDate.has(e.entry_date)) byDate.set(e.entry_date, new Set());
+    byDate.get(e.entry_date)!.add(e.user_id);
+  }
+  return [...byDate.entries()].map(([date, users]) => ({
+    date,
+    level: users.size >= 2 ? 'both' : 'one',
+  }));
+}
+
+/** 잔디 데이터: 해당 월(1일~말일)의 참여 현황 — 월 네비게이션 단위 조회 */
+export function useGrass(coupleId: string | undefined, year: number, month: number) {
   return useQuery({
-    queryKey: ['grass', coupleId, entryDate],
+    queryKey: ['grass', coupleId, year, month],
     queryFn: async (): Promise<GrassDay[]> => {
       if (isMock() || !supabase || !coupleId) {
-        if (!isMock()) return [];
-        const [y, m] = entryDate.split('-').map(Number);
-        return [
-          ...MOCK_GRASS_FILLED.map((d) => ({
-            date: toDateString(new Date(y, m - 1, d)),
-            level: 'both' as const,
-          })),
-          ...MOCK_GRASS_HALF.map((d) => ({
-            date: toDateString(new Date(y, m - 1, d)),
-            level: 'one' as const,
-          })),
-        ];
+        return isMock() ? mockGrassMonth(year, month) : [];
       }
-      const from = daysAgo(entryDate, 61);
-      const [{ data: entries, error }, { data: photoRows, error: photoError }] = await Promise.all([
-        supabase
-          .from('daily_entries_unlocked')
-          .select('id, user_id, entry_date, mood, has_answer')
-          .gte('entry_date', from)
-          .lte('entry_date', entryDate),
-        supabase.from('daily_photos').select('entry_id'),
-      ]);
-      if (error) throw error;
-      if (photoError) throw photoError;
-      const entriesWithPhoto = new Set((photoRows ?? []).map((p) => p.entry_id as string));
-      const byDate = new Map<string, Set<string>>();
-      for (const e of (entries ?? []) as (DailyEntry & { id: string })[]) {
-        const participated = e.mood !== null || e.has_answer || entriesWithPhoto.has(e.id);
-        if (!participated) continue;
-        if (!byDate.has(e.entry_date)) byDate.set(e.entry_date, new Set());
-        byDate.get(e.entry_date)!.add(e.user_id);
-      }
-      return [...byDate.entries()].map(([date, users]) => ({
-        date,
-        level: users.size >= 2 ? 'both' : 'one',
-      }));
+      const from = toDateString(new Date(year, month - 1, 1));
+      const to = toDateString(new Date(year, month, 0));
+      return fetchParticipation(from, to);
     },
   });
+}
+
+/** 스트릭 계산용: 최근 62일 참여 현황 (잔디 월 조회와 분리 — 월을 넘겨봐도 스트릭은 그대로) */
+export function useStreakDays(coupleId: string | undefined, entryDate: string) {
+  return useQuery({
+    queryKey: ['streak', coupleId, entryDate],
+    queryFn: async (): Promise<GrassDay[]> => {
+      if (isMock() || !supabase || !coupleId) {
+        const now = new Date();
+        return isMock() ? mockGrassMonth(now.getFullYear(), now.getMonth() + 1) : [];
+      }
+      return fetchParticipation(daysAgo(entryDate, 61), entryDate);
+    },
+  });
+}
+
+// ── 잔디 상세 (잔디 칸 탭 → 그날 보기) ──────────────────────────
+
+export interface DayDetail {
+  myEntry: DailyEntry | null;
+  partnerEntry: DailyEntry | null;
+  /** RLS가 상호 잠금을 강제 — 잠긴 짝꿍 사진은 행 자체가 오지 않는다 */
+  photos: DailyPhoto[];
+  isLoading: boolean;
+}
+
+/** 목: 둘 다 참여를 마친 날의 엔트리 쌍 — 오늘 카드(저장 후 상태)와 잔디 상세 데모 겸용 */
+export function mockTodayPair(date: string): { myEntry: DailyEntry; partnerEntry: DailyEntry } {
+  const base = { couple_id: 'mock-couple', entry_date: date, question_id: 1 };
+  return {
+    myEntry: {
+      ...base,
+      id: 'mock-me',
+      user_id: 'mock-me',
+      mood: '😊',
+      answer: '같이 걷던 골목이 제일 좋았어',
+      has_answer: true,
+      note: '퇴근길 하늘이 예뻐서 네 생각 났어',
+    },
+    partnerEntry: {
+      ...base,
+      id: 'mock-partner',
+      user_id: 'mock-partner',
+      mood: '🥰',
+      answer: '네가 크게 웃던 순간!',
+      has_answer: true,
+      note: '오늘은 왠지 하루가 짧았다',
+    },
+  };
+}
+
+/** 목 상세: 잔디 목데이터와 같은 날짜만 채워서 시트 데모가 이어지게 */
+function mockDayDetail(date: string): { myEntry: DailyEntry | null; partnerEntry: DailyEntry | null } {
+  const now = new Date();
+  const [y, m, d] = date.split('-').map(Number);
+  const currentMonth = y === now.getFullYear() && m === now.getMonth() + 1;
+  const today = now.getDate();
+  if (currentMonth && !MOCK_GRASS_HALF.includes(d) && (MOCK_GRASS_FILLED.includes(d) || d === today || d === today - 1)) {
+    return mockTodayPair(date);
+  }
+  if (currentMonth && MOCK_GRASS_HALF.includes(d)) {
+    // 한 명만 참여한 날: 짝꿍만 답해서 내 쪽에선 잠겨 있는 상태를 보여준다
+    return {
+      myEntry: null,
+      partnerEntry: {
+        couple_id: 'mock-couple',
+        entry_date: date,
+        question_id: 1,
+        id: 'mock-partner',
+        user_id: 'mock-partner',
+        mood: '😴',
+        answer: null,
+        has_answer: true,
+        note: '조금 피곤했던 하루',
+      },
+    };
+  }
+  return { myEntry: null, partnerEntry: null };
+}
+
+/** 그날 상세: 두 사람 엔트리(뷰 — 답 잠금 자동) + 사진(RLS — 잠금 자동) */
+export function useDayDetail(
+  coupleId: string | undefined,
+  userId: string | undefined,
+  date: string,
+): DayDetail {
+  const entriesQuery = useDailyEntries(coupleId, date);
+  const entries = entriesQuery.data ?? [];
+  const photosQuery = useDailyPhotos(entries.map((e) => e.id));
+  if (isMock()) {
+    return { ...mockDayDetail(date), photos: [], isLoading: false };
+  }
+  return {
+    myEntry: entries.find((e) => e.user_id === userId) ?? null,
+    partnerEntry: entries.find((e) => e.user_id !== userId) ?? null,
+    photos: photosQuery.data ?? [],
+    isLoading: entriesQuery.isLoading,
+  };
 }

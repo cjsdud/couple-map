@@ -34,7 +34,7 @@ export function entryDateFor(now: Date, dayCutoff: number): string {
 export interface StreakDay {
   /** YYYY-MM-DD */
   date: string;
-  /** 그날 둘 다 참여(사진·질문·기분 중 1+)했는가 */
+  /** 그날 둘 다 참여(기분·질문 답·한 줄 일기 중 1+ — 사진은 자유, 인정 요건 아님)했는가 */
   bothFilled: boolean;
 }
 

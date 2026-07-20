@@ -46,6 +46,17 @@ function Gate() {
     bump((n) => n + 1);
   }, []);
 
+  // ?mock=1: 로그인 없이 예시 데이터로 화면을 둘러보는 미리보기 모드
+  if (new URLSearchParams(window.location.search).has('mock')) {
+    return (
+      <>
+        <div className="sticky top-0 z-50 bg-sky/60 px-4 py-1.5 text-center text-xs font-semibold">
+          미리보기 모드 — 예시 데이터라 저장되지 않아요
+        </div>
+        <AppShell />
+      </>
+    );
+  }
   if (!supabase) {
     // 키 미설정 데모 모드 — 셸은 뜨되 저장은 안 됨을 상시 안내
     return (

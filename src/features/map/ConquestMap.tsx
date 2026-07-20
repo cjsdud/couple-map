@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useConquest } from './useConquest';
 import { useRecords } from './useRecords';
@@ -15,6 +15,7 @@ interface SigunguGeo {
 }
 
 const VIEW_W = 800;
+const MAX_ZOOM = 8;
 
 /** 위도 36° 기준 등장방형 근사 — 정복 개요 지도용으로 충분, SDK 불필요 (tech-design §3) */
 function useProjectedPaths(geo: SigunguGeo | undefined) {
@@ -64,7 +65,147 @@ function tierOf(count: number): number {
 
 const TIER_OPACITY = [0, 0.35, 0.5, 0.65, 0.82, 1];
 
-export default function ConquestMap() {
+interface ViewBox {
+  x: number;
+  y: number;
+  w: number;
+}
+
+/** 핀치 줌·팬 — 포인터 이벤트만으로 구현 (새 라이브러리 없이, 규칙 7) */
+function useZoomPan(viewH: number) {
+  const aspect = viewH / VIEW_W;
+  const [vb, setVb] = useState<ViewBox>({ x: 0, y: 0, w: VIEW_W });
+  const svgRef = useRef<SVGSVGElement>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinchDist = useRef(0);
+  const draggedRef = useRef(false);
+
+  const clampView = useCallback(
+    (x: number, y: number, w: number): ViewBox => {
+      const cw = Math.min(Math.max(w, VIEW_W / MAX_ZOOM), VIEW_W);
+      return {
+        x: Math.min(Math.max(x, 0), VIEW_W - cw),
+        y: Math.min(Math.max(y, 0), viewH - cw * aspect),
+        w: cw,
+      };
+    },
+    [aspect, viewH],
+  );
+
+  /** 화면 좌표 → viewBox 좌표 */
+  const toView = useCallback(
+    (clientX: number, clientY: number, v: ViewBox): [number, number] => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect) return [v.x, v.y];
+      return [
+        v.x + ((clientX - rect.left) / rect.width) * v.w,
+        v.y + ((clientY - rect.top) / rect.height) * v.w * aspect,
+      ];
+    },
+    [aspect],
+  );
+
+  const zoomAt = useCallback(
+    (clientX: number, clientY: number, factor: number) => {
+      setVb((v) => {
+        const [px, py] = toView(clientX, clientY, v);
+        const w = Math.min(Math.max(v.w * factor, VIEW_W / MAX_ZOOM), VIEW_W);
+        const k = w / v.w;
+        return clampView(px - (px - v.x) * k, py - (py - v.y) * k, w);
+      });
+    },
+    [clampView, toView],
+  );
+
+  const zoomCenter = useCallback(
+    (factor: number) => {
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+    },
+    [zoomAt],
+  );
+
+  const onPointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      pinchDist.current = Math.hypot(a.x - b.x, a.y - b.y);
+    }
+    if (pointers.current.size === 1) draggedRef.current = false;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+  }, []);
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      const prev = pointers.current.get(e.pointerId);
+      if (!prev) return;
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointers.current.size === 2) {
+        // 핀치: 두 손가락 거리 변화 비율로 중점 기준 줌
+        const [a, b] = [...pointers.current.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchDist.current > 0 && dist > 0) {
+          zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, pinchDist.current / dist);
+        }
+        pinchDist.current = dist;
+        draggedRef.current = true;
+        return;
+      }
+
+      // 팬: 확대 상태에서 한 손가락 드래그 (기본 배율에서는 페이지 스크롤 우선)
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) draggedRef.current = true;
+      setVb((v) => {
+        if (v.w >= VIEW_W) return v;
+        const rect = svgRef.current?.getBoundingClientRect();
+        if (!rect) return v;
+        return clampView(v.x - (dx / rect.width) * v.w, v.y - (dy / rect.height) * v.w * aspect, v.w);
+      });
+    },
+    [aspect, clampView, zoomAt],
+  );
+
+  const onPointerEnd = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinchDist.current = 0;
+  }, []);
+
+  // 드래그·핀치 직후의 클릭은 스팟 탭으로 취급하지 않는다
+  const onClickCapture = useCallback((e: React.MouseEvent) => {
+    if (draggedRef.current) {
+      e.stopPropagation();
+      draggedRef.current = false;
+    }
+  }, []);
+
+  const reset = useCallback(() => setVb({ x: 0, y: 0, w: VIEW_W }), []);
+
+  return {
+    svgRef,
+    viewBoxAttr: `${vb.x.toFixed(1)} ${vb.y.toFixed(1)} ${vb.w.toFixed(1)} ${(vb.w * aspect).toFixed(1)}`,
+    scaleFactor: vb.w / VIEW_W,
+    zoomed: vb.w < VIEW_W,
+    zoomCenter,
+    reset,
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: onPointerEnd,
+      onPointerCancel: onPointerEnd,
+      onClickCapture,
+    },
+  };
+}
+
+export default function ConquestMap({
+  onSelectRecord,
+}: {
+  /** 스팟 점 탭 → 기록 상세 시트 오픈 */
+  onSelectRecord?: (recordId: string) => void;
+}) {
   const { visitCounts } = useConquest();
   const { data: geo } = useQuery({
     queryKey: ['sigungu-geo'],
@@ -76,6 +217,9 @@ export default function ConquestMap() {
     staleTime: Infinity,
   });
   const projected = useProjectedPaths(geo);
+  const { svgRef, viewBoxAttr, scaleFactor, zoomed, zoomCenter, reset, handlers } = useZoomPan(
+    projected?.viewH ?? VIEW_W,
+  );
 
   if (!projected) {
     return (
@@ -86,59 +230,112 @@ export default function ConquestMap() {
   }
 
   return (
-    <svg
-      viewBox={`0 0 ${VIEW_W} ${projected.viewH.toFixed(0)}`}
-      className="w-full rounded-2xl rounded-tr-md border-2 border-ink/10 bg-white/40"
-      role="img"
-      aria-label="대한민국 시군구 정복 지도"
-    >
-      <defs>
-        {/* 크레용 빗금 — 덧칠(방문 횟수)은 opacity 단계로 표현 */}
-        <pattern id="crayon" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="7" stroke="#8cab68" strokeWidth="3.5" strokeLinecap="round" />
-        </pattern>
-        {/* 손그림 wobble */}
-        <filter id="wobble">
-          <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" result="noise" />
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" />
-        </filter>
-      </defs>
-      <g filter="url(#wobble)">
-        {projected.paths.map((p) => {
-          const tier = tierOf(visitCounts[p.code] ?? 0);
-          return (
-            <g key={p.code}>
-              <path d={p.d} fill="#fdfcf7" stroke="#3b3733" strokeOpacity="0.25" strokeWidth="1" />
-              {tier > 0 && (
-                <path d={p.d} fill="url(#crayon)" opacity={TIER_OPACITY[tier]}>
-                  <title>{`${p.name} ×${visitCounts[p.code]}`}</title>
-                </path>
-              )}
-            </g>
-          );
-        })}
-      </g>
-      <SpotOverlay toXY={projected.toXY} />
-    </svg>
+    <div className="relative">
+      <svg
+        ref={svgRef}
+        viewBox={viewBoxAttr}
+        className="w-full select-none rounded-2xl rounded-tr-md border-2 border-ink/10 bg-white/40"
+        style={{ touchAction: zoomed ? 'none' : 'pan-y' }}
+        role="img"
+        aria-label="대한민국 시군구 정복 지도 (핀치로 확대·축소)"
+        {...handlers}
+      >
+        <defs>
+          {/* 크레용 빗금 — 덧칠(방문 횟수)은 opacity 단계로 표현 */}
+          <pattern id="crayon" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="7" stroke="#8cab68" strokeWidth="3.5" strokeLinecap="round" />
+          </pattern>
+          {/* 손그림 wobble */}
+          <filter id="wobble">
+            <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" />
+          </filter>
+        </defs>
+        <g filter="url(#wobble)">
+          {projected.paths.map((p) => {
+            const tier = tierOf(visitCounts[p.code] ?? 0);
+            return (
+              <g key={p.code}>
+                <path
+                  d={p.d}
+                  fill="#fdfcf7"
+                  stroke="#3b3733"
+                  strokeOpacity="0.25"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {tier > 0 && (
+                  <path d={p.d} fill="url(#crayon)" opacity={TIER_OPACITY[tier]}>
+                    <title>{`${p.name} ×${visitCounts[p.code]}`}</title>
+                  </path>
+                )}
+              </g>
+            );
+          })}
+        </g>
+        <SpotOverlay toXY={projected.toXY} onSelectRecord={onSelectRecord} scaleFactor={scaleFactor} />
+      </svg>
+
+      {/* 줌 컨트롤 — 핀치가 어려운 환경 대비 */}
+      <div className="absolute right-2 top-2 flex flex-col gap-1">
+        <button
+          type="button"
+          aria-label="지도 확대"
+          onClick={() => zoomCenter(1 / 1.5)}
+          className="h-9 w-9 rounded-xl rounded-tl-sm border border-ink/15 bg-paper/90 text-lg font-bold shadow-sm active:translate-y-px"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          aria-label="지도 축소"
+          onClick={() => zoomCenter(1.5)}
+          className="h-9 w-9 rounded-xl rounded-br-sm border border-ink/15 bg-paper/90 text-lg font-bold shadow-sm active:translate-y-px"
+        >
+          −
+        </button>
+        {zoomed && (
+          <button
+            type="button"
+            aria-label="전체 지도 보기"
+            onClick={reset}
+            className="h-9 w-9 rounded-xl border border-ink/15 bg-paper/90 text-sm shadow-sm active:translate-y-px"
+          >
+            ⤢
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
-/** 기록 스팟 점 + 같은 기록 스팟의 점선 연결 (명세 §3.1 데이트 기록 핀) */
-function SpotOverlay({ toXY }: { toXY: (lng: number, lat: number) => [number, number] }) {
+/** 기록 스팟 점 + 같은 기록 스팟의 점선 연결 (명세 §3.1 데이트 기록 핀) — 점 탭 시 기록 상세 */
+function SpotOverlay({
+  toXY,
+  onSelectRecord,
+  scaleFactor,
+}: {
+  toXY: (lng: number, lat: number) => [number, number];
+  onSelectRecord?: (recordId: string) => void;
+  /** 줌 배율 보정 — 확대해도 점 크기가 화면상 일정하게 */
+  scaleFactor: number;
+}) {
   const { data: records = [] } = useRecords();
+  const r = 6 * scaleFactor;
+  const hitR = 14 * scaleFactor;
   return (
     <g>
-      {records.map((r) => {
-        const pts = r.spots
+      {records.map((rec) => {
+        const pts = rec.spots
           .slice()
           .sort((a, b) => a.seq - b.seq)
           .filter((s) => s.lat !== null && s.lng !== null)
           .map((s) => ({ s, xy: toXY(s.lng as number, s.lat as number) }));
         if (pts.length === 0) return null;
-        const visited = r.status === 'visited';
+        const visited = rec.status === 'visited';
         const color = visited ? '#e8637c' : '#3b3733';
         return (
-          <g key={r.id} opacity={visited ? 1 : 0.4}>
+          <g key={rec.id} opacity={visited ? 1 : 0.4}>
             {pts.length > 1 && (
               <polyline
                 points={pts.map((p) => p.xy.join(',')).join(' ')}
@@ -147,20 +344,22 @@ function SpotOverlay({ toXY }: { toXY: (lng: number, lat: number) => [number, nu
                 strokeWidth="2"
                 strokeDasharray="5 5"
                 strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
               />
             )}
             {pts.map((p) => (
-              <circle
+              <g
                 key={p.s.id}
-                cx={p.xy[0]}
-                cy={p.xy[1]}
-                r="6"
-                fill={color}
-                stroke="#fdfcf7"
-                strokeWidth="2.5"
+                role={onSelectRecord ? 'button' : undefined}
+                aria-label={`${p.s.name} 기록 보기`}
+                onClick={() => onSelectRecord?.(rec.id)}
+                className={onSelectRecord ? 'cursor-pointer' : undefined}
               >
                 <title>{p.s.name}</title>
-              </circle>
+                <circle cx={p.xy[0]} cy={p.xy[1]} r={r} fill={color} stroke="#fdfcf7" strokeWidth={2.5 * scaleFactor} />
+                {/* 투명 히트 영역 — 작은 점도 엄지로 탭 가능하게 */}
+                <circle cx={p.xy[0]} cy={p.xy[1]} r={hitR} fill="transparent" />
+              </g>
             ))}
           </g>
         );

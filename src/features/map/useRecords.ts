@@ -199,6 +199,66 @@ export function useCreateRecord(coupleId: string | undefined) {
   });
 }
 
+/** 기록 사진 행 + 표시용 signed URL (useDailyPhotos와 같은 패턴 — photos 버킷) */
+export interface RecordPhoto {
+  id: string;
+  storage_path: string;
+  seq: number;
+  signedUrl?: string;
+}
+
+/** 기록 상세 사진 조회 — record_photos → storage signed URL. 목/미연결이면 빈 배열 (섹션 생략) */
+export function useRecordPhotos(recordId: string | undefined) {
+  return useQuery({
+    queryKey: ['record-photos', recordId],
+    queryFn: async (): Promise<RecordPhoto[]> => {
+      if (!supabase || !recordId) return [];
+      const { data, error } = await supabase
+        .from('record_photos')
+        .select('id, storage_path, seq')
+        .eq('record_id', recordId)
+        .order('seq');
+      if (error) throw error;
+      const rows = data as RecordPhoto[];
+      if (rows.length === 0) return rows;
+      const { data: signed, error: signError } = await supabase.storage
+        .from('photos')
+        .createSignedUrls(rows.map((r) => r.storage_path), 3600);
+      if (signError) throw signError;
+      return rows.map((r, i) => ({ ...r, signedUrl: signed[i]?.signedUrl ?? undefined }));
+    },
+    enabled: Boolean(supabase && recordId) && !isMock(),
+  });
+}
+
+/** 회색 핀(가고 싶어요) → 다녀왔어요 전환 (명세 §3.1) — 지도 색칠·정복률에 바로 반영 */
+export function useMarkVisited() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (recordId: string) => {
+      if (isMock()) return recordId; // 데모 모드: 캐시만 갱신 (onSuccess)
+      if (!supabase) throw new Error('Supabase 연결 후 바꿀 수 있어요');
+      const { error } = await supabase
+        .from('records')
+        .update({ status: 'visited' })
+        .eq('id', recordId);
+      if (error) throw error;
+      return recordId;
+    },
+    onSuccess: (recordId) => {
+      if (isMock()) {
+        // invalidate하면 목데이터로 되돌아가므로 캐시를 직접 바꾼다
+        queryClient.setQueryData<RecordRow[]>(['records'], (prev) =>
+          prev?.map((r) => (r.id === recordId ? { ...r, status: 'visited' } : r)),
+        );
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ['records'] });
+      void queryClient.invalidateQueries({ queryKey: ['conquest'] });
+    },
+  });
+}
+
 /** 커플 구성원 (지출 '낸 사람' 선택지) */
 export function useCoupleMembers() {
   return useQuery({

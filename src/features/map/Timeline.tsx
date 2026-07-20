@@ -8,7 +8,14 @@ type Item =
   | { kind: 'daily'; date: string; summary: DailyDaySummary };
 
 /** 타임라인 뷰 (지도 ↔ 토글) — 데이트 기록 + 오늘 기록 통합, 필터 전체/데이트만/오늘만 */
-export default function Timeline({ filter }: { filter: Filter }) {
+export default function Timeline({
+  filter,
+  onSelectRecord,
+}: {
+  filter: Filter;
+  /** 데이트 기록 카드 탭 → 기록 상세 시트 오픈 (지도 핀과 동일) */
+  onSelectRecord?: (recordId: string) => void;
+}) {
   const { couple, entryDate } = useTodayContext();
   const { data: records = [], isPending } = useRecords();
   const daily = useDailyTimeline(couple?.id, entryDate).data ?? [];
@@ -36,7 +43,12 @@ export default function Timeline({ filter }: { filter: Filter }) {
     <ol className="space-y-3">
       {items.map((item) =>
         item.kind === 'record' ? (
-          <RecordItem key={`r-${item.record.id}`} record={item.record} clusterCounts={clusterCounts} />
+          <RecordItem
+            key={`r-${item.record.id}`}
+            record={item.record}
+            clusterCounts={clusterCounts}
+            onSelect={onSelectRecord}
+          />
         ) : (
           <DailyItem key={`d-${item.date}`} summary={item.summary} />
         ),
@@ -45,39 +57,52 @@ export default function Timeline({ filter }: { filter: Filter }) {
   );
 }
 
-function RecordItem({ record: r, clusterCounts }: { record: RecordRow; clusterCounts: Record<string, number> }) {
+function RecordItem({
+  record: r,
+  clusterCounts,
+  onSelect,
+}: {
+  record: RecordRow;
+  clusterCounts: Record<string, number>;
+  onSelect?: (recordId: string) => void;
+}) {
   const total = r.expenses.reduce((sum, e) => sum + e.amount, 0);
   return (
-    <li
-      className={`rounded-2xl rounded-tl-md border-2 bg-white/60 p-4 ${
-        r.status === 'visited' ? 'border-ink/15' : 'border-dashed border-ink/25'
-      }`}
-    >
-      <div className="flex items-center justify-between text-xs opacity-60">
-        <span>{r.date}</span>
-        {r.status === 'planned' && <span className="font-semibold">가고 싶은 곳</span>}
-      </div>
-      <p className="mt-1 text-sm font-semibold leading-relaxed">
-        {r.spots
-          .slice()
-          .sort((a, b) => a.seq - b.seq)
-          .map((s, i) => {
-            const n = s.kakao_place_id ? clusterCounts[s.kakao_place_id] : 0;
-            return (
-              <span key={s.id}>
-                {i > 0 && <span className="opacity-40"> → </span>}
-                {s.name}
-                {n > 1 && <span className="ml-0.5 text-xs text-pink">×{n}</span>}
-              </span>
-            );
-          })}
-      </p>
-      {r.memo && <p className="mt-1 text-sm opacity-70">{r.memo}</p>}
-      {total > 0 && (
-        <p className="mt-2 text-xs opacity-60">
-          {r.expenses.map((e) => CATEGORY_LABEL[e.category]).join(' · ')} — {total.toLocaleString()}원
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect?.(r.id)}
+        aria-label={`${r.date} 기록 자세히 보기`}
+        className={`w-full rounded-2xl rounded-tl-md border-2 bg-white/60 p-4 text-left active:translate-y-px ${
+          r.status === 'visited' ? 'border-ink/15' : 'border-dashed border-ink/25'
+        }`}
+      >
+        <div className="flex items-center justify-between text-xs opacity-60">
+          <span>{r.date}</span>
+          {r.status === 'planned' && <span className="font-semibold">가고 싶은 곳</span>}
+        </div>
+        <p className="mt-1 text-sm font-semibold leading-relaxed">
+          {r.spots
+            .slice()
+            .sort((a, b) => a.seq - b.seq)
+            .map((s, i) => {
+              const n = s.kakao_place_id ? clusterCounts[s.kakao_place_id] : 0;
+              return (
+                <span key={s.id}>
+                  {i > 0 && <span className="opacity-40"> → </span>}
+                  {s.name}
+                  {n > 1 && <span className="ml-0.5 text-xs text-pink">×{n}</span>}
+                </span>
+              );
+            })}
         </p>
-      )}
+        {r.memo && <p className="mt-1 text-sm opacity-70">{r.memo}</p>}
+        {total > 0 && (
+          <p className="mt-2 text-xs opacity-60">
+            {r.expenses.map((e) => CATEGORY_LABEL[e.category]).join(' · ')} — {total.toLocaleString()}원
+          </p>
+        )}
+      </button>
     </li>
   );
 }
@@ -87,6 +112,7 @@ function DailyItem({ summary: s }: { summary: DailyDaySummary }) {
   const parts = [
     s.photoCount > 0 ? `사진 ${s.photoCount}장` : null,
     s.answeredCount > 0 ? `질문 답 ${s.answeredCount}` : null,
+    s.noteCount > 0 ? `일기 ${s.noteCount}` : null,
   ].filter(Boolean);
   return (
     <li className="rounded-2xl rounded-br-md border border-ink/10 bg-white/40 px-4 py-3">

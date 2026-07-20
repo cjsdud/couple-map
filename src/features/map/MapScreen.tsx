@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSession } from '../../shared/lib/auth';
 import { useCoupleState } from '../couple/useCoupleState';
 import ConquestMap from './ConquestMap';
+import RecordDetailSheet from './RecordDetailSheet';
 import RecordSheet from './RecordSheet';
 import Timeline from './Timeline';
 import { useConquest } from './useConquest';
@@ -21,6 +22,8 @@ export default function MapScreen() {
   const [view, setView] = useState<View>('map');
   const [filter, setFilter] = useState<Filter>('all');
   const [sheetOpen, setSheetOpen] = useState(false);
+  // 지도 핀·타임라인 카드 공용 상세 시트 — 선택된 기록 id
+  const [detailId, setDetailId] = useState<string | null>(null);
   const { session } = useSession();
   const coupleState = useCoupleState(session?.user.id);
   const coupleId = coupleState.data?.couple?.id;
@@ -67,7 +70,7 @@ export default function MapScreen() {
               </p>
             </div>
           )}
-          <ConquestMap />
+          <ConquestMap onSelectRecord={setDetailId} />
         </>
       ) : (
         <>
@@ -85,7 +88,7 @@ export default function MapScreen() {
               </button>
             ))}
           </div>
-          <Timeline filter={filter} />
+          <Timeline filter={filter} onSelectRecord={setDetailId} />
         </>
       )}
 
@@ -99,6 +102,7 @@ export default function MapScreen() {
       </button>
 
       <RecordSheet open={sheetOpen} onClose={() => setSheetOpen(false)} coupleId={coupleId} />
+      <RecordDetailSheet recordId={detailId} onClose={() => setDetailId(null)} />
     </main>
   );
 }
