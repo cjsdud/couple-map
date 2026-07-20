@@ -12,6 +12,10 @@ export interface Couple {
   invite_code: string;
   status: 'pending' | 'active' | 'closed';
   started_at: string | null;
+  /** '오늘' 마감 시각 (0~23시, 기본 0=자정) — entry_date 계산 기준 */
+  day_cutoff: number;
+  /** 부담 비율 (user_a %) — 가계부 밸런스(M3) */
+  ratio_a: number;
 }
 
 export interface CoupleState {
@@ -38,7 +42,7 @@ async function fetchCoupleState(userId: string): Promise<CoupleState> {
 
   const { data: couple, error: coupleError } = await sb
     .from('couples')
-    .select('id, invite_code, status, started_at')
+    .select('id, invite_code, status, started_at, day_cutoff, ratio_a')
     .eq('id', profile.couple_id)
     .maybeSingle<Couple>();
   if (coupleError) throw coupleError;
