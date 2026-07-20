@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import { coordToRegion, searchPlaces, type KakaoPlace } from '../../shared/lib/kakao';
 import { toDateString } from '../../shared/lib/daily';
@@ -16,9 +16,12 @@ interface Props {
   open: boolean;
   onClose: () => void;
   coupleId: string | undefined;
+  /** 핀 승격 등 프리필 진입 (열릴 때 1회 적용) */
+  initial?: { status?: 'visited' | 'planned'; date?: string; spots?: SpotDraft[] };
 }
 
 const MAX_SPOTS = 5;
+const MAX_PHOTOS = 10;
 const CATEGORIES = Object.keys(CATEGORY_LABEL) as ExpenseCategory[];
 
 /**
@@ -26,13 +29,25 @@ const CATEGORIES = Object.keys(CATEGORY_LABEL) as ExpenseCategory[];
  * 첫 단계에서 다녀왔어요/가고 싶어요 분기 → 스팟(1~5)·메모·지출 입력.
  * 사진 첨부는 M2 업로드 파이프라인 연동 후속.
  */
-export default function RecordSheet({ open, onClose, coupleId }: Props) {
+export default function RecordSheet({ open, onClose, coupleId, initial }: Props) {
   const [status, setStatus] = useState<'visited' | 'planned' | null>(null);
   const [date, setDate] = useState(() => toDateString(new Date()));
   const [memo, setMemo] = useState('');
   const [spots, setSpots] = useState<SpotDraft[]>([]);
   const [expenses, setExpenses] = useState<ExpenseDraft[]>([]);
+  const [photos, setPhotos] = useState<File[]>([]);
   const createRecord = useCreateRecord(coupleId);
+
+  // 열릴 때 프리필 적용 (핀 승격: 오늘 사진 위치 → 스팟)
+  const [appliedOpen, setAppliedOpen] = useState(false);
+  if (open && !appliedOpen) {
+    setAppliedOpen(true);
+    if (initial) {
+      if (initial.status) setStatus(initial.status);
+      if (initial.date) setDate(initial.date);
+      if (initial.spots) setSpots(initial.spots);
+    }
+  }
 
   const reset = () => {
     setStatus(null);
@@ -40,6 +55,8 @@ export default function RecordSheet({ open, onClose, coupleId }: Props) {
     setMemo('');
     setSpots([]);
     setExpenses([]);
+    setPhotos([]);
+    setAppliedOpen(false);
     createRecord.reset();
   };
   const close = () => {
@@ -52,7 +69,7 @@ export default function RecordSheet({ open, onClose, coupleId }: Props) {
   const save = () => {
     if (!status || createRecord.isPending) return;
     createRecord.mutate(
-      { status, date, memo, spots, expenses },
+      { status, date, memo, spots, expenses, photos },
       { onSuccess: close },
     );
   };
@@ -107,6 +124,8 @@ export default function RecordSheet({ open, onClose, coupleId }: Props) {
 
           <SpotEditor spots={spots} onChange={setSpots} />
 
+          {status === 'visited' && <PhotoPicker photos={photos} onChange={setPhotos} />}
+
           <label className="block space-y-1.5">
             <span className="text-sm font-semibold">한 줄 메모</span>
             <input
@@ -138,6 +157,57 @@ export default function RecordSheet({ open, onClose, coupleId }: Props) {
         </form>
       )}
     </BottomSheet>
+  );
+}
+
+// ── 사진 첨부 (핀당 10장, 업로드 시 압축·EXIF 제거) ──────────────
+function PhotoPicker({ photos, onChange }: { photos: File[]; onChange: (f: File[]) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="space-y-2">
+      <span className="text-sm font-semibold">
+        사진 <span className="opacity-50">({photos.length}/{MAX_PHOTOS})</span>
+      </span>
+      {photos.length > 0 && (
+        <ul className="space-y-1">
+          {photos.map((f, i) => (
+            <li key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-1.5 text-xs">
+              <span aria-hidden>🖼️</span>
+              <span className="flex-1 truncate">{f.name}</span>
+              <button
+                type="button"
+                aria-label={`${f.name} 빼기`}
+                onClick={() => onChange(photos.filter((_, j) => j !== i))}
+                className="px-1 opacity-40"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          const picked = [...(e.target.files ?? [])];
+          onChange([...photos, ...picked].slice(0, MAX_PHOTOS));
+          e.target.value = '';
+        }}
+      />
+      {photos.length < MAX_PHOTOS && (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="w-full rounded-2xl rounded-tl-md border-2 border-dashed border-ink/20 bg-white/50 py-2.5 text-sm font-semibold"
+        >
+          📷 사진 고르기
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -22,6 +22,9 @@ export interface DailyPhoto {
   id: string;
   entry_id: string;
   storage_path: string;
+  /** 위치 태그(선택) — 있으면 "핀으로 승격" 가능 (명세 §3.2) */
+  lat: number | null;
+  lng: number | null;
   signedUrl?: string;
 }
 
@@ -63,7 +66,7 @@ export function useDailyPhotos(entryIds: string[]) {
       if (!supabase || entryIds.length === 0) return [];
       const { data, error } = await supabase
         .from('daily_photos')
-        .select('id, entry_id, storage_path')
+        .select('id, entry_id, storage_path, lat, lng')
         .in('entry_id', entryIds)
         .order('created_at');
       if (error) throw error;
@@ -102,10 +105,10 @@ async function ensureMyEntry(
 export function useUploadPhoto(ctx: { coupleId?: string; userId?: string; entryDate: string }) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, coords }: { file: File; coords?: { lat: number; lng: number } }) => {
       if (!supabase || !ctx.coupleId || !ctx.userId) throw new Error('Supabase 연결 후 올릴 수 있어요');
       const entryId = await ensureMyEntry(ctx.coupleId, ctx.userId, ctx.entryDate, null);
-      const blob = await prepareUpload(file); // 압축 + EXIF(GPS) 제거
+      const blob = await prepareUpload(file); // 압축 + EXIF(GPS) 제거 — 위치는 아래 별도 필드로만
       const path = `couples/${ctx.coupleId}/daily/${ctx.entryDate}/${ctx.userId}/${crypto.randomUUID()}.webp`;
       const { error: uploadError } = await supabase.storage
         .from('photos')
@@ -113,7 +116,7 @@ export function useUploadPhoto(ctx: { coupleId?: string; userId?: string; entryD
       if (uploadError) throw uploadError;
       const { error } = await supabase
         .from('daily_photos')
-        .insert({ entry_id: entryId, storage_path: path });
+        .insert({ entry_id: entryId, storage_path: path, lat: coords?.lat ?? null, lng: coords?.lng ?? null });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -191,6 +194,52 @@ export interface GrassDay {
   date: string;
   /** 그날 참여: 둘 다 / 한 명 / 없음 */
   level: 'both' | 'one' | null;
+}
+
+/** 타임라인 '오늘 기록' 통합용 일자별 요약 (명세 §3.1 뷰 토글) */
+export interface DailyDaySummary {
+  date: string;
+  photoCount: number;
+  moods: string[];
+  answeredCount: number;
+}
+
+export function useDailyTimeline(coupleId: string | undefined, entryDate: string) {
+  return useQuery({
+    queryKey: ['daily-timeline', coupleId, entryDate],
+    queryFn: async (): Promise<DailyDaySummary[]> => {
+      if (isMock()) {
+        return [
+          { date: '2026-07-19', photoCount: 3, moods: ['🥰', '😊'], answeredCount: 2 },
+          { date: '2026-07-13', photoCount: 1, moods: ['😴'], answeredCount: 1 },
+        ];
+      }
+      if (!supabase || !coupleId) return [];
+      const from = daysAgo(entryDate, 61);
+      const [{ data: entries, error }, { data: photoRows, error: photoError }] = await Promise.all([
+        supabase
+          .from('daily_entries_unlocked')
+          .select('id, entry_date, mood, has_answer')
+          .gte('entry_date', from)
+          .lte('entry_date', entryDate),
+        supabase.from('daily_photos').select('entry_id'),
+      ]);
+      if (error) throw error;
+      if (photoError) throw photoError;
+      const photoCountByEntry = new Map<string, number>();
+      for (const p of photoRows ?? [])
+        photoCountByEntry.set(p.entry_id as string, (photoCountByEntry.get(p.entry_id as string) ?? 0) + 1);
+      const byDate = new Map<string, DailyDaySummary>();
+      for (const e of (entries ?? []) as { id: string; entry_date: string; mood: string | null; has_answer: boolean }[]) {
+        const s = byDate.get(e.entry_date) ?? { date: e.entry_date, photoCount: 0, moods: [], answeredCount: 0 };
+        s.photoCount += photoCountByEntry.get(e.id) ?? 0;
+        if (e.mood) s.moods.push(e.mood);
+        if (e.has_answer) s.answeredCount += 1;
+        byDate.set(e.entry_date, s);
+      }
+      return [...byDate.values()].filter((s) => s.photoCount + s.moods.length + s.answeredCount > 0);
+    },
+  });
 }
 
 const MOCK_GRASS_FILLED = [1, 2, 3, 5, 6, 8, 11, 12, 13, 14, 15, 17, 18];

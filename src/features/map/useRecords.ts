@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { prepareUpload } from '../../shared/lib/image';
 import { supabase } from '../../shared/lib/supabase';
 
 export type ExpenseCategory = 'meal' | 'cafe' | 'play' | 'move' | 'gift';
@@ -129,6 +130,8 @@ export interface RecordDraft {
   memo: string;
   spots: SpotDraft[];
   expenses: ExpenseDraft[];
+  /** 첨부 사진 (핀당 10장 무료 상한 — RLS 이중 방어) */
+  photos: File[];
 }
 
 export function useCreateRecord(coupleId: string | undefined) {
@@ -172,6 +175,20 @@ export function useCreateRecord(coupleId: string | undefined) {
           })),
         );
         if (expensesError) throw expensesError;
+      }
+
+      // 사진: 압축(EXIF 제거) → couples/{couple_id}/records/{record_id}/ 업로드
+      for (const [i, file] of draft.photos.entries()) {
+        const blob = await prepareUpload(file);
+        const path = `couples/${coupleId}/records/${record.id}/${crypto.randomUUID()}.webp`;
+        const { error: uploadError } = await supabase.storage
+          .from('photos')
+          .upload(path, blob, { contentType: 'image/webp' });
+        if (uploadError) throw uploadError;
+        const { error: photoError } = await supabase
+          .from('record_photos')
+          .insert({ record_id: record.id, storage_path: path, seq: i });
+        if (photoError) throw photoError;
       }
       return record.id as string;
     },

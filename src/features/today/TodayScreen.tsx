@@ -1,6 +1,9 @@
 import { useRef, useState } from 'react';
 import { calcStreak, monthGrid } from '../../shared/lib/daily';
+import { coordToRegion } from '../../shared/lib/kakao';
 import { supabase } from '../../shared/lib/supabase';
+import RecordSheet from '../map/RecordSheet';
+import type { SpotDraft } from '../map/useRecords';
 import {
   isMock,
   useDailyEntries,
@@ -12,6 +15,7 @@ import {
   useTodayContext,
   useUploadPhoto,
   type DailyEntry,
+  type DailyPhoto,
 } from './useToday';
 
 const MOODS = ['😊', '🥰', '😆', '😴', '😢', '😤'];
@@ -38,6 +42,24 @@ export default function TodayScreen() {
 
   const ctx = { coupleId: couple?.id, userId, entryDate };
 
+  // 핀 승격: 위치 태그 있는 오늘 사진 → 기록 시트 프리필 (승격 전엔 지도 미표시, 절대 규칙 6)
+  const [promoteInitial, setPromoteInitial] = useState<SpotDraft[] | null>(null);
+  const promote = (photo: DailyPhoto) => {
+    void (async () => {
+      if (photo.lat === null || photo.lng === null) return;
+      let sigunguCode: string | null = null;
+      let name = '오늘의 순간';
+      try {
+        const region = await coordToRegion(photo.lng, photo.lat);
+        sigunguCode = region.sigunguCode;
+        name = `오늘의 순간 (${region.sigunguName})`;
+      } catch {
+        // 판정 실패해도 승격은 진행
+      }
+      setPromoteInitial([{ name, lat: photo.lat, lng: photo.lng, sigunguCode, kakaoPlaceId: null }]);
+    })();
+  };
+
   return (
     <main className="space-y-4 px-4 py-6">
       <header className="flex items-end justify-between">
@@ -50,22 +72,52 @@ export default function TodayScreen() {
         )}
       </header>
 
-      <UploadCard myCount={isMock() ? 2 : myPhotos.length} urls={myPhotos.map((p) => p.signedUrl ?? '')} ctx={ctx} />
+      <UploadCard myCount={isMock() ? 2 : myPhotos.length} photos={myPhotos} ctx={ctx} onPromote={promote} />
       <PartnerCard unlocked={unlocked} urls={partnerPhotos.map((p) => p.signedUrl ?? '')} hasPartnerEntry={partnerEntry !== null} />
       <QuestionCard myEntry={myEntry} partnerEntry={partnerEntry} startedAt={couple?.started_at ?? null} entryDate={entryDate} ctx={ctx} />
       <MoodCard myEntry={myEntry} partnerEntry={partnerEntry} ctx={ctx} />
       <GrassCard entryDate={entryDate} grass={grass} />
+
+      <RecordSheet
+        open={promoteInitial !== null}
+        onClose={() => setPromoteInitial(null)}
+        coupleId={couple?.id}
+        initial={{ status: 'visited', date: entryDate, spots: promoteInitial ?? [] }}
+      />
     </main>
   );
 }
 
 type Ctx = { coupleId?: string; userId?: string; entryDate: string };
 
-// ── 내 오늘 업로드 ───────────────────────────────────────────────
-function UploadCard({ myCount, urls, ctx }: { myCount: number; urls: string[]; ctx: Ctx }) {
+// ── 내 오늘 업로드 (위치 태그 선택 → 핀 승격 가능) ───────────────
+function UploadCard({
+  myCount,
+  photos,
+  ctx,
+  onPromote,
+}: {
+  myCount: number;
+  photos: DailyPhoto[];
+  ctx: Ctx;
+  onPromote: (photo: DailyPhoto) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadPhoto(ctx);
+  const [withLocation, setWithLocation] = useState(false);
   const canUpload = Boolean(supabase) && myCount < DAILY_PHOTO_LIMIT;
+
+  const pick = (file: File) => {
+    if (!withLocation) {
+      upload.mutate({ file });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => upload.mutate({ file, coords: { lat: pos.coords.latitude, lng: pos.coords.longitude } }),
+      () => upload.mutate({ file }), // 위치 실패 시 태그 없이 업로드
+      { timeout: 8000 },
+    );
+  };
 
   return (
     <section className="space-y-3 rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/60 p-4">
@@ -73,13 +125,37 @@ function UploadCard({ myCount, urls, ctx }: { myCount: number; urls: string[]; c
         <h2 className="text-sm font-semibold">나의 오늘</h2>
         <span className="text-xs opacity-50">{myCount}/{DAILY_PHOTO_LIMIT}장</span>
       </div>
-      {urls.filter(Boolean).length > 0 && (
+      {photos.length > 0 && (
         <div className="grid grid-cols-3 gap-1.5">
-          {urls.filter(Boolean).map((u) => (
-            <img key={u} src={u} alt="오늘 사진" className="aspect-square w-full rounded-xl rounded-tl-sm object-cover" />
+          {photos.map((p) => (
+            <div key={p.id} className="relative">
+              {p.signedUrl && (
+                <img src={p.signedUrl} alt="오늘 사진" className="aspect-square w-full rounded-xl rounded-tl-sm object-cover" />
+              )}
+              {p.lat !== null && p.lng !== null && (
+                // 위치 태그 있는 사진만 승격 가능 — 승격 전에는 지도에 올라가지 않는다
+                <button
+                  type="button"
+                  onClick={() => onPromote(p)}
+                  className="absolute bottom-1 right-1 rounded-full bg-pink px-2 py-0.5 text-[10px] font-bold text-white shadow"
+                >
+                  📍 핀으로
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={withLocation}
+          onChange={(e) => setWithLocation(e.target.checked)}
+          className="h-4 w-4 accent-[#e8637c]"
+        />
+        <span>지금 위치 담기</span>
+        <span className="text-xs opacity-50">— 나중에 핀으로 승격할 수 있어요</span>
+      </label>
       <input
         ref={inputRef}
         type="file"
@@ -87,7 +163,7 @@ function UploadCard({ myCount, urls, ctx }: { myCount: number; urls: string[]; c
         hidden
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file && !upload.isPending) upload.mutate(file);
+          if (file && !upload.isPending) pick(file);
           e.target.value = '';
         }}
       />
