@@ -4,7 +4,7 @@ import { coordToRegion } from '../../shared/lib/kakao';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import RecordSheet from '../map/RecordSheet';
-import type { SpotDraft } from '../map/useRecords';
+import type { PhotoDraft, SpotDraft } from '../map/useRecords';
 import {
   isMock,
   mockTodayPair,
@@ -56,7 +56,10 @@ export default function TodayScreen() {
   const [detailDate, setDetailDate] = useState<string | null>(null);
 
   // 핀 승격: 위치 태그 있는 오늘 사진 → 기록 시트 프리필 (승격 전엔 지도 미표시, 절대 규칙 6)
-  const [promoteInitial, setPromoteInitial] = useState<SpotDraft[] | null>(null);
+  const [promoteInitial, setPromoteInitial] = useState<{
+    spots: SpotDraft[];
+    photos: PhotoDraft[];
+  } | null>(null);
   const promote = (photo: DailyPhoto) => {
     void (async () => {
       if (photo.lat === null || photo.lng === null) return;
@@ -69,7 +72,20 @@ export default function TodayScreen() {
       } catch {
         // 판정 실패해도 승격은 진행
       }
-      setPromoteInitial([{ name, lat: photo.lat, lng: photo.lng, sigunguCode, kakaoPlaceId: null }]);
+      // 오늘 사진을 기록 사진으로 함께 승격 — 스팟 태그 자동 연결 (plan-multi-region B안 2단계)
+      const photos: PhotoDraft[] = [];
+      if (photo.signedUrl) {
+        try {
+          const blob = await (await fetch(photo.signedUrl)).blob();
+          photos.push({ file: new File([blob], '오늘의 사진.webp', { type: blob.type }), spotIndex: 0 });
+        } catch {
+          // 사진 가져오기 실패 시 스팟만 프리필
+        }
+      }
+      setPromoteInitial({
+        spots: [{ name, lat: photo.lat, lng: photo.lng, sigunguCode, kakaoPlaceId: null }],
+        photos,
+      });
     })();
   };
 
@@ -118,7 +134,12 @@ export default function TodayScreen() {
         open={promoteInitial !== null}
         onClose={() => setPromoteInitial(null)}
         coupleId={couple?.id}
-        initial={{ status: 'visited', date: entryDate, spots: promoteInitial ?? [] }}
+        initial={{
+          status: 'visited',
+          date: entryDate,
+          spots: promoteInitial?.spots ?? [],
+          photos: promoteInitial?.photos ?? [],
+        }}
       />
       {detailDate !== null && (
         <DayDetailSheet

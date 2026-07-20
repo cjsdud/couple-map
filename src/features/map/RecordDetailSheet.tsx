@@ -5,7 +5,56 @@ import {
   useMarkVisited,
   useRecordPhotos,
   useRecords,
+  type RecordPhoto,
+  type SpotRow,
 } from './useRecords';
+
+/** 스팟 태그별 사진 그룹핑 (plan-multi-region B안) — 태그가 하나도 없으면 헤더 없이 평평하게 */
+function PhotoGroups({ photos, spots }: { photos: RecordPhoto[]; spots: SpotRow[] }) {
+  const grid = (list: RecordPhoto[]) => (
+    <div className="grid grid-cols-3 gap-1.5">
+      {list.map(
+        (p) =>
+          p.signedUrl && (
+            <img
+              key={p.id}
+              src={p.signedUrl}
+              alt="데이트 사진"
+              loading="lazy"
+              className="aspect-square w-full rounded-xl rounded-tl-sm border border-ink/10 object-cover"
+            />
+          ),
+      )}
+    </div>
+  );
+
+  const hasTag = photos.some((p) => p.spot_id !== null);
+  if (!hasTag) return grid(photos);
+
+  const untagged = photos.filter((p) => p.spot_id === null);
+  return (
+    <div className="space-y-3">
+      {spots.map((s, i) => {
+        const group = photos.filter((p) => p.spot_id === s.id);
+        if (group.length === 0) return null;
+        return (
+          <div key={s.id} className="space-y-1.5">
+            <p className="text-xs font-semibold opacity-60">
+              <span className="text-pink">{i + 1}</span> {s.name}
+            </p>
+            {grid(group)}
+          </div>
+        );
+      })}
+      {untagged.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold opacity-60">함께한 순간</p>
+          {grid(untagged)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface Props {
   /** 보여줄 기록 id — null이면 닫힘 */
@@ -64,22 +113,7 @@ export default function RecordDetailSheet({ recordId, onClose }: Props) {
 
           {record.memo && <p className="text-sm leading-relaxed opacity-70">{record.memo}</p>}
 
-          {photos.length > 0 && (
-            <div className="grid grid-cols-3 gap-1.5">
-              {photos.map(
-                (p) =>
-                  p.signedUrl && (
-                    <img
-                      key={p.id}
-                      src={p.signedUrl}
-                      alt="데이트 사진"
-                      loading="lazy"
-                      className="aspect-square w-full rounded-xl rounded-tl-sm border border-ink/10 object-cover"
-                    />
-                  ),
-              )}
-            </div>
-          )}
+          {photos.length > 0 && <PhotoGroups photos={photos} spots={spots} />}
 
           {record.expenses.length > 0 && (
             <div className="space-y-1.5">

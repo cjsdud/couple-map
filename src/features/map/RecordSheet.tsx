@@ -9,6 +9,7 @@ import {
   useCreateRecord,
   type ExpenseCategory,
   type ExpenseDraft,
+  type PhotoDraft,
   type SpotDraft,
 } from './useRecords';
 
@@ -17,7 +18,13 @@ interface Props {
   onClose: () => void;
   coupleId: string | undefined;
   /** 핀 승격 등 프리필 진입 (열릴 때 1회 적용) */
-  initial?: { status?: 'visited' | 'planned'; date?: string; spots?: SpotDraft[] };
+  initial?: {
+    status?: 'visited' | 'planned';
+    date?: string;
+    spots?: SpotDraft[];
+    /** 핀 승격 시 오늘 사진을 기록 사진으로 함께 가져오기 */
+    photos?: PhotoDraft[];
+  };
 }
 
 const MAX_SPOTS = 5;
@@ -35,10 +42,10 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
   const [memo, setMemo] = useState('');
   const [spots, setSpots] = useState<SpotDraft[]>([]);
   const [expenses, setExpenses] = useState<ExpenseDraft[]>([]);
-  const [photos, setPhotos] = useState<File[]>([]);
+  const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const createRecord = useCreateRecord(coupleId);
 
-  // 열릴 때 프리필 적용 (핀 승격: 오늘 사진 위치 → 스팟)
+  // 열릴 때 프리필 적용 (핀 승격: 오늘 사진 위치 → 스팟 + 사진 동반)
   const [appliedOpen, setAppliedOpen] = useState(false);
   if (open && !appliedOpen) {
     setAppliedOpen(true);
@@ -46,6 +53,7 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
       if (initial.status) setStatus(initial.status);
       if (initial.date) setDate(initial.date);
       if (initial.spots) setSpots(initial.spots);
+      if (initial.photos) setPhotos(initial.photos);
     }
   }
 
@@ -124,7 +132,7 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
 
           <SpotEditor spots={spots} onChange={setSpots} />
 
-          {status === 'visited' && <PhotoPicker photos={photos} onChange={setPhotos} />}
+          {status === 'visited' && <PhotoPicker photos={photos} spots={spots} onChange={setPhotos} />}
 
           <label className="block space-y-1.5">
             <span className="text-sm font-semibold">한 줄 메모</span>
@@ -161,27 +169,65 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
 }
 
 // ── 사진 첨부 (핀당 10장, 업로드 시 압축·EXIF 제거) ──────────────
-function PhotoPicker({ photos, onChange }: { photos: File[]; onChange: (f: File[]) => void }) {
+// 스팟 태그는 선택 사항 — 달면 상세에서 스팟별로 묶여 보인다 (plan-multi-region B안)
+function PhotoPicker({
+  photos,
+  spots,
+  onChange,
+}: {
+  photos: PhotoDraft[];
+  spots: SpotDraft[];
+  onChange: (f: PhotoDraft[]) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const setSpotIndex = (i: number, spotIndex: number | null) =>
+    onChange(photos.map((p, j) => (j === i ? { ...p, spotIndex } : p)));
   return (
     <div className="space-y-2">
       <span className="text-sm font-semibold">
         사진 <span className="opacity-50">({photos.length}/{MAX_PHOTOS})</span>
       </span>
       {photos.length > 0 && (
-        <ul className="space-y-1">
-          {photos.map((f, i) => (
-            <li key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-1.5 text-xs">
-              <span aria-hidden>🖼️</span>
-              <span className="flex-1 truncate">{f.name}</span>
-              <button
-                type="button"
-                aria-label={`${f.name} 빼기`}
-                onClick={() => onChange(photos.filter((_, j) => j !== i))}
-                className="px-1 opacity-40"
-              >
-                ✕
-              </button>
+        <ul className="space-y-1.5">
+          {photos.map((p, i) => (
+            <li key={`${p.file.name}-${i}`} className="space-y-1 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2">
+              <div className="flex items-center gap-2 text-xs">
+                <span aria-hidden>🖼️</span>
+                <span className="flex-1 truncate">{p.file.name}</span>
+                <button
+                  type="button"
+                  aria-label={`${p.file.name} 빼기`}
+                  onClick={() => onChange(photos.filter((_, j) => j !== i))}
+                  className="px-1 opacity-40"
+                >
+                  ✕
+                </button>
+              </div>
+              {spots.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSpotIndex(i, null)}
+                    className={`rounded-full px-2 py-0.5 text-[11px] ${
+                      p.spotIndex === null ? 'bg-ink text-paper' : 'border border-ink/15 opacity-60'
+                    }`}
+                  >
+                    어디든
+                  </button>
+                  {spots.map((s, si) => (
+                    <button
+                      key={si}
+                      type="button"
+                      onClick={() => setSpotIndex(i, si)}
+                      className={`max-w-28 truncate rounded-full px-2 py-0.5 text-[11px] ${
+                        p.spotIndex === si ? 'bg-green font-bold text-white' : 'border border-ink/15 opacity-60'
+                      }`}
+                    >
+                      {si + 1} {s.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -193,7 +239,7 @@ function PhotoPicker({ photos, onChange }: { photos: File[]; onChange: (f: File[
         multiple
         hidden
         onChange={(e) => {
-          const picked = [...(e.target.files ?? [])];
+          const picked = [...(e.target.files ?? [])].map((file): PhotoDraft => ({ file, spotIndex: null }));
           onChange([...photos, ...picked].slice(0, MAX_PHOTOS));
           e.target.value = '';
         }}

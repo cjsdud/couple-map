@@ -124,6 +124,12 @@ export interface ExpenseDraft {
   paidBy: string | null;
 }
 
+/** 첨부 사진 초안 — spotIndex는 "어느 스팟에서 찍었는지" 선택 태그 (미지정 허용, plan-multi-region B안) */
+export interface PhotoDraft {
+  file: File;
+  spotIndex: number | null;
+}
+
 export interface RecordDraft {
   status: 'visited' | 'planned';
   date: string;
@@ -131,7 +137,7 @@ export interface RecordDraft {
   spots: SpotDraft[];
   expenses: ExpenseDraft[];
   /** 첨부 사진 (핀당 10장 무료 상한 — RLS 이중 방어) */
-  photos: File[];
+  photos: PhotoDraft[];
 }
 
 export function useCreateRecord(coupleId: string | undefined) {
@@ -152,18 +158,23 @@ export function useCreateRecord(coupleId: string | undefined) {
         .single();
       if (error) throw error;
 
-      const { error: spotsError } = await supabase.from('spots').insert(
-        draft.spots.map((s, i) => ({
-          record_id: record.id,
-          seq: i + 1,
-          name: s.name,
-          lat: s.lat,
-          lng: s.lng,
-          sigungu_code: s.sigunguCode,
-          kakao_place_id: s.kakaoPlaceId,
-        })),
-      );
+      const { data: spotRows, error: spotsError } = await supabase
+        .from('spots')
+        .insert(
+          draft.spots.map((s, i) => ({
+            record_id: record.id,
+            seq: i + 1,
+            name: s.name,
+            lat: s.lat,
+            lng: s.lng,
+            sigungu_code: s.sigunguCode,
+            kakao_place_id: s.kakaoPlaceId,
+          })),
+        )
+        .select('id, seq');
       if (spotsError) throw spotsError;
+      // 사진의 스팟 태그(spotIndex) → 방금 생성된 spot id 매핑
+      const spotIdBySeq = new Map((spotRows ?? []).map((s) => [s.seq as number, s.id as string]));
 
       if (draft.expenses.length > 0) {
         const { error: expensesError } = await supabase.from('expenses').insert(
@@ -177,17 +188,20 @@ export function useCreateRecord(coupleId: string | undefined) {
         if (expensesError) throw expensesError;
       }
 
-      // 사진: 압축(EXIF 제거) → couples/{couple_id}/records/{record_id}/ 업로드
-      for (const [i, file] of draft.photos.entries()) {
-        const blob = await prepareUpload(file);
+      // 사진: 압축(EXIF 제거) → couples/{couple_id}/records/{record_id}/ 업로드 (+선택 스팟 태그)
+      for (const [i, photo] of draft.photos.entries()) {
+        const blob = await prepareUpload(photo.file);
         const path = `couples/${coupleId}/records/${record.id}/${crypto.randomUUID()}.webp`;
         const { error: uploadError } = await supabase.storage
           .from('photos')
           .upload(path, blob, { contentType: 'image/webp' });
         if (uploadError) throw uploadError;
-        const { error: photoError } = await supabase
-          .from('record_photos')
-          .insert({ record_id: record.id, storage_path: path, seq: i });
+        const { error: photoError } = await supabase.from('record_photos').insert({
+          record_id: record.id,
+          storage_path: path,
+          seq: i,
+          spot_id: photo.spotIndex !== null ? (spotIdBySeq.get(photo.spotIndex + 1) ?? null) : null,
+        });
         if (photoError) throw photoError;
       }
       return record.id as string;
@@ -204,6 +218,8 @@ export interface RecordPhoto {
   id: string;
   storage_path: string;
   seq: number;
+  /** 스팟 태그 (선택) — 상세에서 스팟별 그룹핑 (plan-multi-region B안) */
+  spot_id: string | null;
   signedUrl?: string;
 }
 
@@ -215,7 +231,7 @@ export function useRecordPhotos(recordId: string | undefined) {
       if (!supabase || !recordId) return [];
       const { data, error } = await supabase
         .from('record_photos')
-        .select('id, storage_path, seq')
+        .select('id, storage_path, seq, spot_id')
         .eq('record_id', recordId)
         .order('seq');
       if (error) throw error;
