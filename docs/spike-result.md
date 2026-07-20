@@ -71,6 +71,15 @@
 - 산출물: `supabase/seed/sigungu.sql`(230행), `src/shared/lib/sigunguAlias.ts`(일반구 39개→모시 정규화), `public/geo/sigungu.json`(행정동 ver20260701 → 시군구 병합·1.5% 단순화, 207KB, 행안부 코드 100% 조인).
 - **기획 반영 필요**: 명세·CLAUDE.md의 "229" 표기는 "230(2026-07 기준)"으로 갱신 권장 — 사용자 컨펌 대기. 코드는 `SIGUNGU_TOTAL = 230`으로 반영 완료.
 
+## 실 Supabase 프로젝트 검증 (2026-07-20, M0·M2 DoD 일부 선행 달성)
+
+사용자가 생성한 실 프로젝트(마이그레이션 0001~0005 + 시드 적용)에 대해 자동 e2e 실행:
+
+- **시드**: sigungu 230행, questions 730행 확인.
+- **커플 연결**: 테스트 계정 2개로 create_couple→초대 코드→join_couple→active 전환 성공 (M0 DoD의 API 경로 검증 — 실기기 브라우저 확인만 남음).
+- **상호 잠금 (M2 DoD)**: 22개 체크 전부 통과 — A만 업로드 시 B의 직접 API 호출로 사진 행·signed URL 모두 차단, B 업로드 순간 해제, 질문 답은 사진과 독립적으로 양방 잠금, answer 컬럼 직접 조회 거부, 제3자 격리, 사용된 초대 코드 재사용 불가.
+- **발견·수정된 결함**: daily_photos RLS 정책의 자기 참조 무한 재귀(42P17)로 사진 insert 전면 차단 → `0005_fix_daily_photos_recursion.sql`(security definer 함수로 고리 절단) 적용 후 전체 통과.
+
 ## 판정과 다음 단계
 
 **항목 4 판정: "강제" 케이스 확정.** CLAUDE.md Phase 0 규칙에 따라 tech-design §12-1 매핑 레이어를 M0 범위에 추가했다 (CLAUDE.md M0 절 수정 반영). 이것은 "실패"가 아니라 사전에 정의된 분기이므로 작업 중단 사유는 아님.
