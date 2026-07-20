@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useConquest } from './useConquest';
+import { useRecords } from './useRecords';
 
 type Ring = [number, number][];
 interface SigunguFeature {
@@ -36,9 +37,13 @@ function useProjectedPaths(geo: SigunguGeo | undefined) {
     }
     const scale = VIEW_W / (maxX - minX);
     const viewH = (maxY - minY) * scale;
+    const toXY = (lng: number, lat: number): [number, number] => {
+      const [x, y] = project([lng, lat]);
+      return [(x - minX) * scale, (y - minY) * scale];
+    };
     const toSvg = (pt: [number, number]) => {
-      const [x, y] = project(pt);
-      return `${((x - minX) * scale).toFixed(1)},${((y - minY) * scale).toFixed(1)}`;
+      const [x, y] = toXY(pt[0], pt[1]);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
     };
     const paths = geo.features.map((f) => {
       const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
@@ -47,7 +52,7 @@ function useProjectedPaths(geo: SigunguGeo | undefined) {
         .join('');
       return { code: f.properties.code, name: f.properties.name, d };
     });
-    return { paths, viewH };
+    return { paths, viewH, toXY };
   }, [geo]);
 }
 
@@ -113,6 +118,53 @@ export default function ConquestMap() {
           );
         })}
       </g>
+      <SpotOverlay toXY={projected.toXY} />
     </svg>
+  );
+}
+
+/** 기록 스팟 점 + 같은 기록 스팟의 점선 연결 (명세 §3.1 데이트 기록 핀) */
+function SpotOverlay({ toXY }: { toXY: (lng: number, lat: number) => [number, number] }) {
+  const { data: records = [] } = useRecords();
+  return (
+    <g>
+      {records.map((r) => {
+        const pts = r.spots
+          .slice()
+          .sort((a, b) => a.seq - b.seq)
+          .filter((s) => s.lat !== null && s.lng !== null)
+          .map((s) => ({ s, xy: toXY(s.lng as number, s.lat as number) }));
+        if (pts.length === 0) return null;
+        const visited = r.status === 'visited';
+        const color = visited ? '#e8637c' : '#3b3733';
+        return (
+          <g key={r.id} opacity={visited ? 1 : 0.4}>
+            {pts.length > 1 && (
+              <polyline
+                points={pts.map((p) => p.xy.join(',')).join(' ')}
+                fill="none"
+                stroke={color}
+                strokeWidth="2"
+                strokeDasharray="5 5"
+                strokeLinecap="round"
+              />
+            )}
+            {pts.map((p) => (
+              <circle
+                key={p.s.id}
+                cx={p.xy[0]}
+                cy={p.xy[1]}
+                r="6"
+                fill={color}
+                stroke="#fdfcf7"
+                strokeWidth="2.5"
+              >
+                <title>{p.s.name}</title>
+              </circle>
+            ))}
+          </g>
+        );
+      })}
+    </g>
   );
 }
