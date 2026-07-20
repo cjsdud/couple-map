@@ -146,16 +146,18 @@ function UploadCard({
           ))}
         </div>
       )}
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={withLocation}
-          onChange={(e) => setWithLocation(e.target.checked)}
-          className="h-4 w-4 accent-[#e8637c]"
-        />
-        <span>지금 위치 담기</span>
-        <span className="text-xs opacity-50">— 나중에 핀으로 승격할 수 있어요</span>
-      </label>
+      <div className="space-y-0.5">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={withLocation}
+            onChange={(e) => setWithLocation(e.target.checked)}
+            className="h-4 w-4 shrink-0 accent-[#e8637c]"
+          />
+          <span className="whitespace-nowrap">지금 위치 담기</span>
+        </label>
+        <p className="pl-6 text-xs opacity-50">위치를 담아두면 나중에 핀으로 승격할 수 있어요</p>
+      </div>
       <input
         ref={inputRef}
         type="file"

@@ -11,9 +11,9 @@ const BASE = 'https://dapi.kakao.com/v2/local';
 function restKey(): string {
   const key = import.meta.env.VITE_KAKAO_REST_KEY as string | undefined;
   if (!key) {
-    throw new Error(
-      'VITE_KAKAO_REST_KEY가 설정되지 않았어요. Kakao Developers에서 REST 키를 발급해 환경변수로 넣어 주세요.',
-    );
+    // 개발 상세는 콘솔로, 화면에는 사용자 문구만
+    console.error('VITE_KAKAO_REST_KEY 미설정 — Kakao Developers에서 REST 키를 발급해 환경변수로 넣어 주세요.');
+    throw new Error('장소 검색 준비가 아직 안 됐어요. 잠시 후 다시 시도해 주세요.');
   }
   return key;
 }
@@ -24,9 +24,8 @@ async function kakaoGet<T>(path: string, params: Record<string, string>): Promis
     headers: { Authorization: `KakaoAK ${restKey()}` },
   });
   if (!res.ok) {
-    throw new Error(
-      `Kakao Local API 응답 HTTP ${res.status} — REST 키와 웹 플랫폼 도메인 설정을 확인해 주세요.`,
-    );
+    console.error(`Kakao Local API HTTP ${res.status} — REST 키·웹 플랫폼 도메인 설정 확인 필요 (${path})`);
+    throw new Error('장소 검색이 잠깐 안 되고 있어요. 잠시 후 다시 시도해 주세요.');
   }
   return (await res.json()) as T;
 }

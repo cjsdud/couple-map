@@ -56,7 +56,19 @@ export default function MapScreen() {
       </header>
 
       {view === 'map' ? (
-        <ConquestMap />
+        <>
+          {visitedCount === 0 && (
+            // 첫 실행 행동 유도 (IA 원칙 4: 투어 대신 그 자리에서) — 첫 핀이 생기면 사라진다.
+            // 지도 위에 배치해 작은 화면에서도 스크롤 없이 보이고 FAB와 겹치지 않는다.
+            <div className="rounded-2xl rounded-tl-md border-2 border-dashed border-pink/40 bg-white/50 px-4 py-3 text-center">
+              <p className="text-sm font-semibold">🖍️ 아직 새하얀 도화지예요</p>
+              <p className="mt-0.5 text-sm opacity-60">
+                오른쪽 아래 <b className="text-pink">+</b> 를 눌러 첫 데이트 장소를 콕 찍어 볼까요?
+              </p>
+            </div>
+          )}
+          <ConquestMap />
+        </>
       ) : (
         <>
           <div className="flex gap-1.5">
