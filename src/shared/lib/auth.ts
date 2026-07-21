@@ -10,7 +10,12 @@ export function signInWithKakao() {
   if (!supabase) return Promise.resolve();
   return supabase.auth.signInWithOAuth({
     provider: 'kakao',
-    options: { redirectTo: window.location.origin },
+    options: {
+      redirectTo: window.location.origin,
+      // 이메일(account_email) 동의항목은 비즈 앱 전용 → 요청 자체를 안 한다 (KOE205 방지).
+      // 계정 식별은 카카오 고유 id로 충분하고, 커플 연결은 초대 코드 방식이라 이메일 불필요.
+      scopes: 'profile_nickname profile_image',
+    },
   });
 }
 
