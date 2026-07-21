@@ -8,7 +8,7 @@ import {
   markStartedAtSkipped,
   useCoupleState,
 } from '../features/couple/useCoupleState';
-import { useSession } from '../shared/lib/auth';
+import { completeKakaoLogin, KAKAO_CALLBACK_PATH, useSession } from '../shared/lib/auth';
 import { supabase } from '../shared/lib/supabase';
 import AppShell from './AppShell';
 
@@ -26,12 +26,40 @@ function useHashRoute(): string {
   return hash;
 }
 
-function Splash() {
+function Splash({ label = '도화지를 펼치는 중…' }: { label?: string }) {
   return (
     <div className="flex min-h-dvh items-center justify-center text-sm opacity-50">
-      도화지를 펼치는 중…
+      {label}
     </div>
   );
+}
+
+/** 카카오 리다이렉트 복귀(/kakao?code=…) → 자체 계정 세션 수립 후 홈으로 */
+function KakaoCallback() {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('code');
+    if (!code) {
+      setFailed(true);
+      return;
+    }
+    void completeKakaoLogin(code).then((ok) => {
+      if (ok) window.location.replace('/');
+      else setFailed(true);
+    });
+  }, []);
+  if (failed) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-3xl" aria-hidden>🥲</p>
+        <p className="text-sm opacity-70">카카오 로그인이 중간에 끊겼어요. 다시 한 번 시도해 주세요.</p>
+        <a href="/" className="rounded-2xl rounded-tl-md bg-pink px-5 py-2.5 text-sm font-bold text-white">
+          처음으로 돌아가기
+        </a>
+      </div>
+    );
+  }
+  return <Splash label="카카오로 들어가는 중…" />;
 }
 
 /** 인증·커플 연결 게이트: 로그인 → 온보딩(닉네임·초대 코드·사귄 날) → 3탭 셸 */
@@ -93,6 +121,9 @@ function Gate() {
 
 export default function App() {
   const hash = useHashRoute();
+  if (window.location.pathname === KAKAO_CALLBACK_PATH) {
+    return <KakaoCallback />;
+  }
   return (
     <QueryClientProvider client={queryClient}>
       {/* Phase 0 진단 페이지는 실기기 검증 때까지 #/spike 경로로 유지 */}

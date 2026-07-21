@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { signOut } from '../../shared/lib/auth';
+import { signOut, suggestedNickname } from '../../shared/lib/auth';
 import {
   useCreateCouple,
   useCreateProfile,
@@ -77,7 +77,8 @@ export default function OnboardingFlow({
 
 // ── ① 닉네임 ─────────────────────────────────────────────────────
 function NicknameStep({ userId }: { userId: string }) {
-  const [nickname, setNickname] = useState('');
+  // 카카오 프로필 닉네임이 있으면 미리 채워준다 (수정 가능)
+  const [nickname, setNickname] = useState(suggestedNickname);
   const createProfile = useCreateProfile(userId);
   const valid = nickname.trim().length >= 1 && nickname.trim().length <= 12;
 
