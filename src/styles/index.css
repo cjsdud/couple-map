@@ -14,3 +14,10 @@ body {
   background-color: var(--color-paper);
   color: var(--color-ink);
 }
+
+/* iOS 입력창 자동 확대 방지 2중 장치: 폼 컨트롤은 항상 16px 이상 */
+input,
+select,
+textarea {
+  font-size: max(16px, 1rem);
+}
