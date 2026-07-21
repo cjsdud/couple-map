@@ -324,6 +324,8 @@ function SpotOverlay({
   const { data: records = [] } = useRecords();
   const r = 6 * scaleFactor;
   const hitR = 14 * scaleFactor;
+  // 2.2배 이상 확대하면 점 아래에 장소 이름 라벨 (사용자 요청 2026-07-21)
+  const showLabels = scaleFactor <= 1 / 2.2;
   return (
     <g>
       {records.map((rec) => {
@@ -358,6 +360,23 @@ function SpotOverlay({
               >
                 <title>{p.s.name}</title>
                 <circle cx={p.xy[0]} cy={p.xy[1]} r={r} fill={color} stroke="#fdfcf7" strokeWidth={2.5 * scaleFactor} />
+                {showLabels && (
+                  // 종이색 테두리 글자 — 경계선 위에서도 읽히게 (화면상 크기 일정)
+                  <text
+                    x={p.xy[0]}
+                    y={p.xy[1] + 16 * scaleFactor}
+                    textAnchor="middle"
+                    dominantBaseline="hanging"
+                    fontSize={11 * scaleFactor}
+                    fontWeight={600}
+                    fill="#3b3733"
+                    stroke="#fdfcf7"
+                    strokeWidth={3 * scaleFactor}
+                    paintOrder="stroke"
+                  >
+                    {p.s.name}
+                  </text>
+                )}
                 {/* 투명 히트 영역 — 작은 점도 엄지로 탭 가능하게 */}
                 <circle cx={p.xy[0]} cy={p.xy[1]} r={hitR} fill="transparent" />
               </g>
