@@ -1,5 +1,5 @@
 import { useDailyTimeline, useTodayContext, type DailyDaySummary } from '../today/useToday';
-import { CATEGORY_LABEL, placeVisitCounts, useRecords, type RecordRow } from './useRecords';
+import { categoryLabel, placeVisitCounts, useRecords, type RecordRow } from './useRecords';
 
 type Filter = 'all' | 'date' | 'daily';
 
@@ -102,7 +102,7 @@ function RecordItem({
         {r.memo && <p className="mt-1 break-words text-sm opacity-70">{r.memo}</p>}
         {total > 0 && (
           <p className="mt-2 text-xs opacity-60">
-            {r.expenses.map((e) => CATEGORY_LABEL[e.category]).join(' · ')} — {total.toLocaleString()}원
+            {r.expenses.map((e) => categoryLabel(e.category)).join(' · ')} — {total.toLocaleString()}원
           </p>
         )}
       </button>

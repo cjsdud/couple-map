@@ -2,15 +2,23 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { prepareUpload } from '../../shared/lib/image';
 import { supabase } from '../../shared/lib/supabase';
 
-export type ExpenseCategory = 'meal' | 'cafe' | 'play' | 'move' | 'gift';
+/** 기본 5종 + 자유 입력 허용 (사용자 결정, 0010 마이그레이션) — 커스텀은 입력한 텍스트 그대로 저장 */
+export type ExpenseCategory = string;
 
-export const CATEGORY_LABEL: Record<ExpenseCategory, string> = {
+export const PRESET_CATEGORIES = ['meal', 'cafe', 'play', 'move', 'gift'] as const;
+
+export const CATEGORY_LABEL: Record<string, string> = {
   meal: '밥',
   cafe: '카페',
   play: '놀이',
   move: '이동',
   gift: '선물',
 };
+
+/** 카테고리 표시명 — 기본 5종은 한글 라벨, 커스텀은 저장된 텍스트 그대로 */
+export function categoryLabel(category: string): string {
+  return CATEGORY_LABEL[category] ?? category;
+}
 
 export interface SpotRow {
   id: string;

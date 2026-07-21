@@ -251,7 +251,8 @@ export default function ConquestMap({
             <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" />
           </filter>
         </defs>
-        <g filter="url(#wobble)">
+        {/* wobble 필터는 기본 배율에서만 — 확대 시 iOS가 필터 래스터 한계로 지도를 통째로 안 그리는 문제 회피 */}
+        <g filter={zoomed ? undefined : 'url(#wobble)'}>
           {projected.paths.map((p) => {
             const tier = tierOf(visitCounts[p.code] ?? 0);
             return (

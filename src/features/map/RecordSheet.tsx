@@ -4,10 +4,12 @@ import { coordToRegion, searchPlaces, type KakaoPlace } from '../../shared/lib/k
 import { toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
 import {
-  CATEGORY_LABEL,
+  categoryLabel,
   isMock,
+  PRESET_CATEGORIES,
   useCoupleMembers,
   useCreateRecord,
+  useRecords,
   useUpdateRecord,
   type ExpenseCategory,
   type ExpenseDraft,
@@ -37,7 +39,6 @@ interface Props {
 
 const MAX_SPOTS = 5;
 const MAX_PHOTOS = 10;
-const CATEGORIES = Object.keys(CATEGORY_LABEL) as ExpenseCategory[];
 
 /**
  * 기록 작성 바텀시트 (명세 §3.1).
@@ -505,7 +506,7 @@ function SpotEditor({
   );
 }
 
-// ── 지출 입력 (카테고리 5 고정, 다건, 10초 이내 입력 목표) ────────
+// ── 지출 입력 (기본 5종 + 직접 추가, 다건, 10초 이내 입력 목표) ────
 function ExpenseEditor({
   expenses,
   onChange,
@@ -514,15 +515,35 @@ function ExpenseEditor({
   onChange: (e: ExpenseDraft[]) => void;
 }) {
   const members = useCoupleMembers();
+  const { data: records = [] } = useRecords();
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('meal');
   const [paidBy, setPaidBy] = useState<string | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customDraft, setCustomDraft] = useState('');
+
+  // 우리 커플이 전에 쓴 커스텀 카테고리 + 방금 만든 것(선택 상태)도 칩으로
+  const customUsed = [
+    ...new Set(
+      [...records.flatMap((r) => r.expenses.map((e) => e.category)), ...expenses.map((e) => e.category), category].filter(
+        (c) => !(PRESET_CATEGORIES as readonly string[]).includes(c),
+      ),
+    ),
+  ];
 
   const parsed = Number(amount.replace(/[^0-9]/g, ''));
   const add = () => {
     if (!parsed) return;
     onChange([...expenses, { amount: parsed, category, paidBy }]);
     setAmount('');
+  };
+
+  const addCustom = () => {
+    const name = customDraft.trim();
+    if (!name || name.length > 8) return;
+    setCategory(name);
+    setCustomDraft('');
+    setCustomOpen(false);
   };
 
   return (
@@ -538,7 +559,7 @@ function ExpenseEditor({
               key={i}
               className="flex items-center gap-2 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2 text-sm"
             >
-              <span className="rounded-full bg-yellow/40 px-2 py-0.5 text-xs">{CATEGORY_LABEL[e.category]}</span>
+              <span className="max-w-24 truncate rounded-full bg-yellow/40 px-2 py-0.5 text-xs">{categoryLabel(e.category)}</span>
               <span className="flex-1">{e.amount.toLocaleString()}원</span>
               <button
                 type="button"
@@ -554,19 +575,53 @@ function ExpenseEditor({
       )}
 
       <div className="flex flex-wrap gap-1.5">
-        {CATEGORIES.map((c) => (
+        {[...PRESET_CATEGORIES, ...customUsed].map((c) => (
           <button
             key={c}
             type="button"
             onClick={() => setCategory(c)}
-            className={`rounded-full px-3 py-1.5 text-sm ${
+            className={`max-w-28 truncate rounded-full px-3 py-1.5 text-sm ${
               category === c ? 'bg-green font-bold text-white' : 'border border-ink/15 bg-white/60'
             }`}
           >
-            {CATEGORY_LABEL[c]}
+            {categoryLabel(c)}
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setCustomOpen((v) => !v)}
+          className={`rounded-full px-3 py-1.5 text-sm ${
+            customOpen ? 'bg-ink text-paper' : 'border border-dashed border-ink/25 bg-white/60'
+          }`}
+        >
+          + 직접
+        </button>
       </div>
+      {customOpen && (
+        <div className="flex gap-2">
+          <input
+            value={customDraft}
+            onChange={(e) => setCustomDraft(e.target.value)}
+            maxLength={8}
+            placeholder="카테고리 이름 (8자까지)"
+            className="min-w-0 flex-1 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustom();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={addCustom}
+            disabled={!customDraft.trim()}
+            className="shrink-0 rounded-2xl rounded-br-md bg-sky px-4 py-2.5 text-sm font-bold text-ink disabled:opacity-40"
+          >
+            만들기
+          </button>
+        </div>
+      )}
       <div className="flex gap-2">
         <input
           inputMode="numeric"

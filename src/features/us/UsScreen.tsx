@@ -3,7 +3,7 @@ import { signOut, useSession } from '../../shared/lib/auth';
 import { toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
 import { useCoupleState, useUpdateNickname } from '../couple/useCoupleState';
-import { CATEGORY_LABEL, useCoupleMembers } from '../map/useRecords';
+import { categoryLabel, useCoupleMembers } from '../map/useRecords';
 import { dPlus, upcomingMilestones, useMonthlyExpenses, useUpdateCouple } from './useUs';
 
 /** 우리 탭: 디데이·기념일 / 가계부 월간 카드 / 설정 (명세 §3.3) */
@@ -124,7 +124,7 @@ function ExpenseMonthCard({ today }: { today: string }) {
           <p className="text-sm opacity-70">
             {[...byCategory.entries()]
               .sort((a, b) => b[1] - a[1])
-              .map(([c, v]) => `${CATEGORY_LABEL[c as keyof typeof CATEGORY_LABEL]} ${Math.round((v / total) * 100)}%`)
+              .map(([c, v]) => `${categoryLabel(c)} ${Math.round((v / total) * 100)}%`)
               .join(' · ')}
           </p>
           <p className="rounded-xl rounded-tl-sm bg-sky/25 px-3 py-2 text-sm">{balanceLine}</p>

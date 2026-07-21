@@ -3,6 +3,7 @@ import { calcStreak, monthGrid } from '../../shared/lib/daily';
 import { coordToRegion } from '../../shared/lib/kakao';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
+import PhotoViewer from '../../shared/ui/PhotoViewer';
 import RecordSheet from '../map/RecordSheet';
 import type { PhotoDraft, SpotDraft } from '../map/useRecords';
 import {
@@ -54,6 +55,8 @@ export default function TodayScreen() {
 
   // 잔디 칸 탭 → 그날 상세 시트 (새 화면 금지 — 시트로만 확장)
   const [detailDate, setDetailDate] = useState<string | null>(null);
+  // 사진 크게 보기 (내/짝꿍/그날 상세 공용)
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
   // 저장 후 수정: 같은 ComposeCard를 기존 값 프리필로 다시 연다 (새 화면 금지)
   const [editing, setEditing] = useState(false);
@@ -133,11 +136,13 @@ export default function TodayScreen() {
         photos={myPhotos}
         ctx={ctx}
         onPromote={promote}
+        onView={setViewerUrl}
       />
       <PartnerCard
         partnerEntry={partnerEntry}
         unlocked={unlocked}
         urls={partnerPhotos.map((p) => p.signedUrl ?? '')}
+        onView={setViewerUrl}
       />
       <GrassCard coupleId={couple?.id} entryDate={entryDate} onSelectDay={setDetailDate} />
 
@@ -159,8 +164,10 @@ export default function TodayScreen() {
           startedAt={couple?.started_at ?? null}
           date={detailDate}
           onClose={() => setDetailDate(null)}
+          onView={setViewerUrl}
         />
       )}
+      <PhotoViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />
     </main>
   );
 }
@@ -376,12 +383,15 @@ function UploadCard({
   photos,
   ctx,
   onPromote,
+  onView,
 }: {
   participated: boolean;
   myCount: number;
   photos: DailyPhoto[];
   ctx: Ctx;
   onPromote: (photo: DailyPhoto) => void;
+  /** 사진 탭 → 크게 보기 */
+  onView: (url: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadPhoto(ctx);
@@ -411,7 +421,14 @@ function UploadCard({
           {photos.map((p) => (
             <div key={p.id} className="relative">
               {p.signedUrl && (
-                <img src={p.signedUrl} alt="오늘 사진" className="aspect-square w-full rounded-xl rounded-tl-sm object-cover" />
+                <button
+                  type="button"
+                  aria-label="사진 크게 보기"
+                  onClick={() => onView(p.signedUrl as string)}
+                  className="block w-full"
+                >
+                  <img src={p.signedUrl} alt="오늘 사진" className="aspect-square w-full rounded-xl rounded-tl-sm object-cover" />
+                </button>
               )}
               {p.lat !== null && p.lng !== null && (
                 // 위치 태그 있는 사진만 승격 가능 — 승격 전에는 지도에 올라가지 않는다
@@ -478,10 +495,13 @@ function PartnerCard({
   partnerEntry,
   unlocked,
   urls,
+  onView,
 }: {
   partnerEntry: DailyEntry | null;
   unlocked: boolean;
   urls: string[];
+  /** 사진 탭 → 크게 보기 */
+  onView: (url: string) => void;
 }) {
   const shown = urls.filter(Boolean);
   return (
@@ -510,7 +530,9 @@ function PartnerCard({
       ) : shown.length > 0 ? (
         <div className="grid grid-cols-3 gap-1.5">
           {shown.map((u) => (
-            <img key={u} src={u} alt="짝꿍의 오늘 사진" className="aspect-square w-full rounded-xl rounded-tl-sm object-cover" />
+            <button key={u} type="button" aria-label="사진 크게 보기" onClick={() => onView(u)} className="block w-full">
+              <img src={u} alt="짝꿍의 오늘 사진" className="aspect-square w-full rounded-xl rounded-tl-sm object-cover" />
+            </button>
           ))}
         </div>
       ) : (
@@ -621,12 +643,15 @@ function DayDetailSheet({
   startedAt,
   date,
   onClose,
+  onView,
 }: {
   coupleId: string | undefined;
   userId: string | undefined;
   startedAt: string | null;
   date: string;
   onClose: () => void;
+  /** 사진 탭 → 크게 보기 */
+  onView: (url: string) => void;
 }) {
   const { myEntry, partnerEntry, photos, isLoading } = useDayDetail(coupleId, userId, date);
   const question = useDayQuestion(
@@ -706,12 +731,19 @@ function DayDetailSheet({
             {photoUrls.length > 0 ? (
               <div className="mt-2 grid grid-cols-3 gap-1.5">
                 {photoUrls.map((p) => (
-                  <img
+                  <button
                     key={p.id}
-                    src={p.signedUrl}
-                    alt="그날 사진"
-                    className="aspect-square w-full rounded-xl rounded-tl-sm object-cover"
-                  />
+                    type="button"
+                    aria-label="사진 크게 보기"
+                    onClick={() => onView(p.signedUrl as string)}
+                    className="block w-full"
+                  >
+                    <img
+                      src={p.signedUrl}
+                      alt="그날 사진"
+                      className="aspect-square w-full rounded-xl rounded-tl-sm object-cover"
+                    />
+                  </button>
                 ))}
               </div>
             ) : (

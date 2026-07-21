@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import BottomSheet from '../../shared/ui/BottomSheet';
+import PhotoViewer from '../../shared/ui/PhotoViewer';
 import {
-  CATEGORY_LABEL,
+  categoryLabel,
   useCoupleMembers,
   useDeleteRecord,
   useDeleteRecordPhoto,
@@ -19,12 +20,15 @@ function PhotoGroups({
   spots,
   onDelete,
   deleting,
+  onView,
 }: {
   photos: RecordPhoto[];
   spots: SpotRow[];
   /** 사진 한 장 지우기 (기존 사진 관리는 여기서 — 작성 시트는 새 사진 추가만) */
   onDelete: (photo: RecordPhoto) => void;
   deleting: boolean;
+  /** 사진 탭 → 크게 보기 */
+  onView: (url: string) => void;
 }) {
   const grid = (list: RecordPhoto[]) => (
     <div className="grid grid-cols-3 gap-1.5">
@@ -32,12 +36,19 @@ function PhotoGroups({
         (p) =>
           p.signedUrl && (
             <div key={p.id} className="relative">
-              <img
-                src={p.signedUrl}
-                alt="데이트 사진"
-                loading="lazy"
-                className="aspect-square w-full rounded-xl rounded-tl-sm border border-ink/10 object-cover"
-              />
+              <button
+                type="button"
+                aria-label="사진 크게 보기"
+                onClick={() => onView(p.signedUrl as string)}
+                className="block w-full"
+              >
+                <img
+                  src={p.signedUrl}
+                  alt="데이트 사진"
+                  loading="lazy"
+                  className="aspect-square w-full rounded-xl rounded-tl-sm border border-ink/10 object-cover"
+                />
+              </button>
               <button
                 type="button"
                 aria-label="이 사진 지우기"
@@ -102,6 +113,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
   const members = useCoupleMembers();
   const markVisited = useMarkVisited();
   const deletePhoto = useDeleteRecordPhoto();
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
   const close = () => {
     markVisited.reset();
@@ -152,6 +164,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                 onDelete={(p) =>
                   deletePhoto.mutate({ id: p.id, recordId: record.id, storagePath: p.storage_path })
                 }
+                onView={setViewerUrl}
               />
               {deletePhoto.isError && (
                 <p className="text-sm text-pink">
@@ -170,8 +183,8 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     key={e.id}
                     className="flex items-center gap-2 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2 text-sm"
                   >
-                    <span className="rounded-full bg-yellow/40 px-2 py-0.5 text-xs">
-                      {CATEGORY_LABEL[e.category]}
+                    <span className="max-w-24 truncate rounded-full bg-yellow/40 px-2 py-0.5 text-xs">
+                      {categoryLabel(e.category)}
                     </span>
                     <span className="flex-1">{e.amount.toLocaleString()}원</span>
                     <span className="text-xs opacity-60">{payerLabel(e.paid_by)}</span>
@@ -207,6 +220,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
           <EditEraseActions key={record.id} record={record} onEdit={onEdit} onDeleted={close} />
         </div>
       )}
+      <PhotoViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />
     </BottomSheet>
   );
 }
