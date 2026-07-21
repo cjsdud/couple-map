@@ -80,6 +80,12 @@
 - **상호 잠금 (M2 DoD)**: 22개 체크 전부 통과 — A만 업로드 시 B의 직접 API 호출로 사진 행·signed URL 모두 차단, B 업로드 순간 해제, 질문 답은 사진과 독립적으로 양방 잠금, answer 컬럼 직접 조회 거부, 제3자 격리, 사용된 초대 코드 재사용 불가.
 - **발견·수정된 결함**: daily_photos RLS 정책의 자기 참조 무한 재귀(42P17)로 사진 insert 전면 차단 → `0005_fix_daily_photos_recursion.sql`(security definer 함수로 고리 절단) 적용 후 전체 통과.
 
+## 웹 채널 카카오 로그인 실기기 통과 (2026-07-21)
+
+- **결과**: 실폰 브라우저에서 카카오 동의 → 세션 수립 → 온보딩 진입 확인 (M0 실기기 검증의 로그인 축 통과).
+- **구조 변경**: Supabase 내장 Kakao provider는 `account_email` scope를 강제(클라이언트 scopes 지정과 무관하게 기본값에 병합됨을 authorize URL 검사로 확인)하는데, 이메일 동의항목은 **비즈 앱 전용**이라 개인 앱에서 KOE205로 사용 불가. → **자체 교환 방식**으로 전환: 닉네임 scope만으로 인가 → `/kakao` 복귀 → Vercel Fn(`api/kakao-login`)이 토큰 교환·`kakao_users` 매핑·회전 비밀번호 발급 → `signInWithPassword`. tech-design §12-1 토스 로그인 매핑과 동일 패턴이라 두 채널 인증 구조가 통일됨.
+- 트러블슈팅 기록: KOE205(동의항목/scope) → scope 축소로도 불가(서버 강제) → 자체 교환. KOE006(리다이렉트 URI 미등록·프리뷰 도메인 접속) → 정식 도메인 + `/kakao` URI 등록으로 해소.
+
 ## 판정과 다음 단계
 
 **항목 4 판정: "강제" 케이스 확정.** CLAUDE.md Phase 0 규칙에 따라 tech-design §12-1 매핑 레이어를 M0 범위에 추가했다 (CLAUDE.md M0 절 수정 반영). 이것은 "실패"가 아니라 사전에 정의된 분기이므로 작업 중단 사유는 아님.
