@@ -48,7 +48,8 @@ export default function BottomSheet({ open, onClose, title, children }: BottomSh
             ✕
           </button>
         </div>
-        {title && <h2 className="mb-3 text-lg font-bold">{title}</h2>}
+        {/* pr-10: sticky ✕ 버튼이 내용 첫 줄까지 내려오므로 제목이 겹치지 않게 여유 확보 */}
+        {title && <h2 className="mb-3 pr-10 text-lg font-bold">{title}</h2>}
         {children}
       </div>
     </div>

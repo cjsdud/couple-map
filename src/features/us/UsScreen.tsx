@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { signOut, useSession } from '../../shared/lib/auth';
 import { toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
-import { useCoupleState } from '../couple/useCoupleState';
+import { useCoupleState, useUpdateNickname } from '../couple/useCoupleState';
 import { CATEGORY_LABEL, useCoupleMembers } from '../map/useRecords';
 import { dPlus, upcomingMilestones, useMonthlyExpenses, useUpdateCouple } from './useUs';
 
@@ -12,6 +12,7 @@ export default function UsScreen() {
   const userId = session?.user.id;
   const coupleQuery = useCoupleState(userId);
   const couple = coupleQuery.data?.couple ?? null;
+  const profile = coupleQuery.data?.profile ?? null;
   const isMock = new URLSearchParams(window.location.search).has('mock');
   const startedAt = couple?.started_at ?? (isMock ? '2026-01-24' : null);
   const today = toDateString(new Date());
@@ -24,6 +25,8 @@ export default function UsScreen() {
       <SettingsCard
         coupleId={couple?.id}
         userId={userId}
+        nickname={profile?.nickname ?? (isMock ? '체리' : '')}
+        mock={isMock}
         dayCutoff={couple?.day_cutoff ?? 0}
         ratioA={couple?.ratio_a ?? 50}
         startedAt={startedAt}
@@ -56,7 +59,7 @@ function DdayCard({ startedAt, today }: { startedAt: string | null; today: strin
           {milestones.map((m) => (
             <li key={m.title} className="flex items-center justify-between text-sm">
               <span className="font-semibold">
-                🎂 {m.title}
+                {m.title}
                 <span className="ml-1.5 text-xs font-normal opacity-50">{m.date}</span>
               </span>
               <span className={m.dDay <= 7 ? 'font-bold text-pink' : 'opacity-60'}>
@@ -90,7 +93,7 @@ function ExpenseMonthCard({ today }: { today: string }) {
     const [topId, topAmount] = [...byPayer.entries()].sort((a, b) => b[1] - a[1])[0];
     if (topAmount / paidTotal >= 0.6) {
       const nick = members.data?.find((mem) => mem.user_id === topId)?.nickname ?? '짝꿍';
-      balanceLine = `요즘엔 ${nick} 쪽이 자주 냈어요`;
+      balanceLine = `이번 달엔 ${nick} 쪽에서 좀 더 자주 냈어요`;
     }
   }
 
@@ -101,7 +104,7 @@ function ExpenseMonthCard({ today }: { today: string }) {
     <section className="space-y-3 rounded-2xl border-2 border-ink/15 bg-white/60 p-4">
       <h2 className="text-sm font-semibold">{m}월 데이트 가계부</h2>
       {rows.length === 0 ? (
-        <p className="text-sm opacity-60">이번 달 지출 기록이 아직 없어요 — 기록에 살짝 적어 두면 모아서 보여드려요</p>
+        <p className="text-sm opacity-60">이번 달 지출 기록이 아직 없어요 — 데이트 기록에 살짝 적어 두면 여기에 모아 드려요</p>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2 text-center">
@@ -131,27 +134,79 @@ function ExpenseMonthCard({ today }: { today: string }) {
   );
 }
 
-// ── 설정: 사귄 날 · 마감 시각 · 부담 비율 · 로그아웃 ─────────────
+// ── 설정: 닉네임 · 사귄 날 · 마감 시각 · 부담 비율 · 로그아웃 ─────
 function SettingsCard({
   coupleId,
   userId,
+  nickname,
+  mock,
   dayCutoff,
   ratioA,
   startedAt,
 }: {
   coupleId: string | undefined;
   userId: string | undefined;
+  nickname: string;
+  mock: boolean;
   dayCutoff: number;
   ratioA: number;
   startedAt: string | null;
 }) {
   const update = useUpdateCouple(coupleId, userId);
+  const updateNickname = useUpdateNickname(userId);
   const [dateDraft, setDateDraft] = useState(startedAt ?? '');
+  // 닉네임 초안: 건드리기 전엔 서버 값을 그대로 프리필 (프로필 로딩 후에도 자연 반영)
+  const [nickDraft, setNickDraft] = useState<string | null>(null);
+  const nickValue = nickDraft ?? nickname;
+  const nickTrimmed = nickValue.trim();
+  // 온보딩 NicknameStep과 동일 규칙: 1~12자
+  const nickValid = nickTrimmed.length >= 1 && nickTrimmed.length <= 12;
   const disabled = !supabase || !coupleId || update.isPending;
 
   return (
     <section className="space-y-4 rounded-2xl rounded-br-md border-2 border-ink/15 bg-white/60 p-4">
       <h2 className="text-sm font-semibold">설정</h2>
+
+      <label className="block space-y-1.5">
+        <span className="text-sm">
+          내 닉네임 <span className="text-xs opacity-50">— 짝꿍에게 보이는 이름이에요</span>
+        </span>
+        <div className="flex gap-2">
+          <input
+            value={nickValue}
+            onChange={(e) => setNickDraft(e.target.value)}
+            maxLength={12}
+            placeholder="닉네임 (12자까지)"
+            className="min-w-0 flex-1 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink"
+          />
+          <button
+            type="button"
+            disabled={
+              !supabase ||
+              !userId ||
+              mock ||
+              updateNickname.isPending ||
+              !nickValid ||
+              nickTrimmed === nickname
+            }
+            onClick={() =>
+              updateNickname.mutate(nickTrimmed, { onSuccess: () => setNickDraft(null) })
+            }
+            className="shrink-0 rounded-2xl rounded-br-md bg-pink px-4 py-2.5 text-sm font-bold text-white disabled:opacity-40"
+          >
+            {updateNickname.isPending ? '저장하는 중…' : '저장'}
+          </button>
+        </div>
+        {updateNickname.isError && (
+          <p className="text-xs text-pink">닉네임을 바꾸지 못했어요. 다시 시도해 주세요.</p>
+        )}
+        {updateNickname.isSuccess && nickDraft === null && (
+          <p className="text-xs opacity-60">닉네임을 바꿨어요 — 짝꿍에게도 곧 새 이름으로 보여요</p>
+        )}
+        {mock && (
+          <p className="text-xs opacity-50">미리보기예요 — 저장은 짝꿍과 연결한 뒤에 할 수 있어요</p>
+        )}
+      </label>
 
       <label className="block space-y-1.5">
         <span className="text-sm">사귄 날</span>
@@ -161,7 +216,7 @@ function SettingsCard({
             value={dateDraft}
             onChange={(e) => setDateDraft(e.target.value)}
             max={toDateString(new Date())}
-            className="min-w-0 flex-1 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 text-sm outline-none focus:border-pink"
+            className="min-w-0 flex-1 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink"
           />
           <button
             type="button"
@@ -176,13 +231,13 @@ function SettingsCard({
 
       <label className="block space-y-1.5">
         <span className="text-sm">
-          &lsquo;오늘&rsquo; 마감 시각 <span className="text-xs opacity-50">— 늦은 데이트 사진이 어제 칸에 들어가게</span>
+          &lsquo;오늘&rsquo; 마감 시각 <span className="text-xs opacity-50">— 새벽까지 이어진 하루도 어제로 담아 줘요</span>
         </span>
         <select
           value={dayCutoff}
           disabled={disabled}
           onChange={(e) => update.mutate({ day_cutoff: Number(e.target.value) })}
-          className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 text-sm outline-none focus:border-pink disabled:opacity-50"
+          className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink disabled:opacity-50"
         >
           {Array.from({ length: 7 }, (_, h) => (
             <option key={h} value={h}>
@@ -194,13 +249,13 @@ function SettingsCard({
 
       <label className="block space-y-1.5">
         <span className="text-sm">
-          데이트 비용 나누기 <span className="text-xs opacity-50">— 밸런스 문구 기준이 돼요</span>
+          데이트 비용 나누기 <span className="text-xs opacity-50">— 가계부 카드가 이 비율을 기준으로 이야기해요</span>
         </span>
         <select
           value={ratioA}
           disabled={disabled}
           onChange={(e) => update.mutate({ ratio_a: Number(e.target.value) })}
-          className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 text-sm outline-none focus:border-pink disabled:opacity-50"
+          className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink disabled:opacity-50"
         >
           {[50, 60, 70, 40, 30].map((r) => (
             <option key={r} value={r}>
@@ -214,12 +269,12 @@ function SettingsCard({
         <button
           type="button"
           onClick={() => void signOut()}
-          className="w-full py-1.5 text-center text-xs opacity-40 underline underline-offset-2"
+          className="w-full py-2.5 text-center text-xs opacity-40 underline underline-offset-2"
         >
           로그아웃
         </button>
       )}
-      {!supabase && <p className="text-xs opacity-50">Supabase 연결 후 바꿀 수 있어요 (데모 모드)</p>}
+      {!supabase && <p className="text-xs opacity-50">데모 모드예요 — 서버와 연결되면 바꿀 수 있어요</p>}
     </section>
   );
 }

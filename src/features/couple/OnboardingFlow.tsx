@@ -67,9 +67,9 @@ export default function OnboardingFlow({
       <button
         type="button"
         onClick={() => void signOut()}
-        className="mx-auto pb-2 text-xs opacity-40 underline underline-offset-2"
+        className="mx-auto px-4 py-3 text-xs opacity-40 underline underline-offset-2"
       >
-        다른 계정으로 시작할래요
+        다른 계정으로 시작하기
       </button>
     </main>
   );
@@ -108,7 +108,7 @@ function NicknameStep({ userId }: { userId: string }) {
         disabled={!valid || createProfile.isPending}
         className="w-full rounded-2xl rounded-tl-md bg-pink px-6 py-3.5 text-base font-bold text-white shadow-sm active:translate-y-px disabled:opacity-40"
       >
-        {createProfile.isPending ? '적는 중…' : '다음'}
+        {createProfile.isPending ? '저장하는 중…' : '다음'}
       </button>
     </form>
   );
@@ -132,7 +132,7 @@ function ConnectStep({ userId, nickname }: { userId: string; nickname: string })
         className="space-y-4"
       >
         <h1 className="text-2xl font-bold">초대 코드 입력</h1>
-        <p className="text-sm opacity-60">짝꿍이 받은 6자리 코드를 그대로 적어 주세요.</p>
+        <p className="text-sm opacity-60">짝꿍에게 받은 6자리 코드를 그대로 적어 주세요.</p>
         <input
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
@@ -240,13 +240,13 @@ function WaitingStep({
         {copied ? '복사했어요!' : '코드 복사하기'}
       </button>
       <p className="text-sm opacity-60">
-        짝꿍이 이 코드를 입력하면 바로 연결돼요.
+        짝꿍이 이 코드를 입력하면 자동으로 연결돼요.
       </p>
       <button
         type="button"
         onClick={onRefetch}
         disabled={refetching}
-        className="text-sm text-pink underline underline-offset-2 disabled:opacity-50"
+        className="px-4 py-2.5 text-sm text-pink underline underline-offset-2 disabled:opacity-50"
       >
         {refetching ? '확인하는 중…' : '연결됐는지 확인하기'}
       </button>
@@ -296,7 +296,7 @@ function StartedAtStep({
         disabled={!date || setStartedAt.isPending}
         className="w-full rounded-2xl rounded-tl-md bg-pink px-6 py-3.5 text-base font-bold text-white shadow-sm active:translate-y-px disabled:opacity-40"
       >
-        {setStartedAt.isPending ? '적는 중…' : '이 날부터 시작!'}
+        {setStartedAt.isPending ? '저장하는 중…' : '이 날부터 시작!'}
       </button>
       <button type="button" onClick={onSkip} className="w-full py-2 text-sm opacity-50">
         나중에 할게요 — 우리 탭에서 언제든 적을 수 있어요

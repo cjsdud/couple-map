@@ -1,28 +1,53 @@
+import { useState } from 'react';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import {
   CATEGORY_LABEL,
   useCoupleMembers,
+  useDeleteRecord,
+  useDeleteRecordPhoto,
   useMarkVisited,
   useRecordPhotos,
   useRecords,
   type RecordPhoto,
+  type RecordRow,
   type SpotRow,
 } from './useRecords';
 
 /** 스팟 태그별 사진 그룹핑 (plan-multi-region B안) — 태그가 하나도 없으면 헤더 없이 평평하게 */
-function PhotoGroups({ photos, spots }: { photos: RecordPhoto[]; spots: SpotRow[] }) {
+function PhotoGroups({
+  photos,
+  spots,
+  onDelete,
+  deleting,
+}: {
+  photos: RecordPhoto[];
+  spots: SpotRow[];
+  /** 사진 한 장 지우기 (기존 사진 관리는 여기서 — 작성 시트는 새 사진 추가만) */
+  onDelete: (photo: RecordPhoto) => void;
+  deleting: boolean;
+}) {
   const grid = (list: RecordPhoto[]) => (
     <div className="grid grid-cols-3 gap-1.5">
       {list.map(
         (p) =>
           p.signedUrl && (
-            <img
-              key={p.id}
-              src={p.signedUrl}
-              alt="데이트 사진"
-              loading="lazy"
-              className="aspect-square w-full rounded-xl rounded-tl-sm border border-ink/10 object-cover"
-            />
+            <div key={p.id} className="relative">
+              <img
+                src={p.signedUrl}
+                alt="데이트 사진"
+                loading="lazy"
+                className="aspect-square w-full rounded-xl rounded-tl-sm border border-ink/10 object-cover"
+              />
+              <button
+                type="button"
+                aria-label="이 사진 지우기"
+                onClick={() => onDelete(p)}
+                disabled={deleting}
+                className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-paper/85 text-sm text-ink shadow-sm active:translate-y-px disabled:opacity-40"
+              >
+                ✕
+              </button>
+            </div>
           ),
       )}
     </div>
@@ -60,6 +85,8 @@ interface Props {
   /** 보여줄 기록 id — null이면 닫힘 */
   recordId: string | null;
   onClose: () => void;
+  /** 수정 플로우 — 상세를 닫고 RecordSheet를 editRecord로 여는 건 부모(MapScreen) 몫 */
+  onEdit?: (record: RecordRow) => void;
 }
 
 /**
@@ -67,16 +94,18 @@ interface Props {
  * 지도 핀 탭·타임라인 카드 탭이 같은 시트를 연다.
  * 회색 핀(가고 싶어요)은 여기서 '다녀왔어요'로 전환한다 (명세 §3.1).
  */
-export default function RecordDetailSheet({ recordId, onClose }: Props) {
+export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) {
   // 기록은 ['records'] 캐시에서 id로 찾는다 — 전환·수정 후 리페치가 시트에 바로 반영된다.
   const { data: records = [] } = useRecords();
   const record = recordId !== null ? (records.find((r) => r.id === recordId) ?? null) : null;
   const photos = useRecordPhotos(record?.id).data ?? [];
   const members = useCoupleMembers();
   const markVisited = useMarkVisited();
+  const deletePhoto = useDeleteRecordPhoto();
 
   const close = () => {
     markVisited.reset();
+    deletePhoto.reset();
     onClose();
   };
 
@@ -90,7 +119,8 @@ export default function RecordDetailSheet({ recordId, onClose }: Props) {
     <BottomSheet open={record !== null} onClose={close}>
       {record && (
         <div className="space-y-5 pb-2">
-          <div className="flex items-center gap-2">
+          {/* pr-10: BottomSheet의 sticky ✕가 첫 줄까지 내려오므로 겹침 방지 여유 */}
+          <div className="flex items-center gap-2 pr-10">
             <h2 className="text-lg font-bold">{record.date}</h2>
             {record.status === 'planned' && (
               <span className="rounded-full border-2 border-dashed border-ink/30 px-2.5 py-0.5 text-xs font-semibold opacity-70">
@@ -106,14 +136,30 @@ export default function RecordDetailSheet({ recordId, onClose }: Props) {
                 className="flex items-center gap-2 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2 text-sm"
               >
                 <span className="font-bold text-pink">{i + 1}</span>
-                <span className="flex-1 truncate">{s.name}</span>
+                <span className="min-w-0 flex-1 truncate">{s.name}</span>
               </li>
             ))}
           </ol>
 
-          {record.memo && <p className="text-sm leading-relaxed opacity-70">{record.memo}</p>}
+          {record.memo && <p className="break-words text-sm leading-relaxed opacity-70">{record.memo}</p>}
 
-          {photos.length > 0 && <PhotoGroups photos={photos} spots={spots} />}
+          {photos.length > 0 && (
+            <div className="space-y-1.5">
+              <PhotoGroups
+                photos={photos}
+                spots={spots}
+                deleting={deletePhoto.isPending}
+                onDelete={(p) =>
+                  deletePhoto.mutate({ id: p.id, recordId: record.id, storagePath: p.storage_path })
+                }
+              />
+              {deletePhoto.isError && (
+                <p className="text-sm text-pink">
+                  사진을 지우다가 문제가 생겼어요. 다시 한 번 해 주세요.
+                </p>
+              )}
+            </div>
+          )}
 
           {record.expenses.length > 0 && (
             <div className="space-y-1.5">
@@ -141,7 +187,7 @@ export default function RecordDetailSheet({ recordId, onClose }: Props) {
           {record.status === 'planned' && (
             <div className="space-y-2">
               {markVisited.isError && (
-                <p className="text-sm text-pink">바꾸다 문제가 있었어요. 다시 한 번 시도해 주세요.</p>
+                <p className="text-sm text-pink">바꾸는 데 문제가 생겼어요. 다시 한 번 해 주세요.</p>
               )}
               <button
                 type="button"
@@ -151,13 +197,80 @@ export default function RecordDetailSheet({ recordId, onClose }: Props) {
               >
                 {markVisited.isPending ? '색칠하는 중…' : '다녀왔어요로 바꾸기'}
               </button>
-              <p className="text-center text-xs opacity-50">
+              <p className="break-keep text-center text-xs opacity-50">
                 지도에 콕 — 이 동네가 우리 색으로 칠해져요
               </p>
             </div>
           )}
+
+          {/* 수정·지우기 — 기록이 바뀌면(key) 확인 상태도 초기화 */}
+          <EditEraseActions key={record.id} record={record} onEdit={onEdit} onDeleted={close} />
         </div>
       )}
     </BottomSheet>
+  );
+}
+
+/** 하단 수정/지우기 액션 — 지우기는 1탭 후 인라인 확인(지우개 컨셉, 경고색 없이 차분하게) */
+function EditEraseActions({
+  record,
+  onEdit,
+  onDeleted,
+}: {
+  record: RecordRow;
+  onEdit?: (record: RecordRow) => void;
+  onDeleted: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const deleteRecord = useDeleteRecord();
+
+  if (!confirming) {
+    return (
+      <div className="flex gap-2">
+        {onEdit && (
+          <button
+            type="button"
+            onClick={() => onEdit(record)}
+            className="flex-1 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 py-3 text-sm font-bold active:translate-y-px"
+          >
+            ✏️ 수정하기
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="flex-1 rounded-2xl rounded-br-md border-2 border-ink/15 bg-white/70 py-3 text-sm font-bold opacity-70 active:translate-y-px"
+        >
+          지우개로 지우기
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-2xl rounded-br-md border-2 border-dashed border-ink/25 bg-white/50 p-3">
+      <p className="text-center text-sm font-semibold">정말 지울까요? 사진·지출도 함께 사라져요</p>
+      {deleteRecord.isError && (
+        <p className="text-center text-sm text-pink">지우다가 문제가 생겼어요. 다시 한 번 해 주세요.</p>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          disabled={deleteRecord.isPending}
+          className="flex-1 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 py-2.5 text-sm font-bold active:translate-y-px disabled:opacity-40"
+        >
+          그대로 둘래요
+        </button>
+        <button
+          type="button"
+          onClick={() => deleteRecord.mutate(record.id, { onSuccess: onDeleted })}
+          disabled={deleteRecord.isPending}
+          className="flex-1 rounded-2xl rounded-br-md bg-ink py-2.5 text-sm font-bold text-paper active:translate-y-px disabled:opacity-40"
+        >
+          {deleteRecord.isPending ? '지우는 중…' : '지우개로 지우기'}
+        </button>
+      </div>
+    </div>
   );
 }

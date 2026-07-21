@@ -34,7 +34,7 @@ export default function Timeline({
     return (
       <div className="space-y-1 py-10 text-center">
         <p className="text-3xl" aria-hidden>🖍️</p>
-        <p className="text-sm opacity-60">아직 기록이 없어요 — 첫 데이트 장소를 콕 찍어 볼까요?</p>
+        <p className="break-keep text-sm opacity-60">아직 기록이 없어요 — 첫 데이트 장소를 콕 찍어 볼까요?</p>
       </div>
     );
   }
@@ -90,13 +90,16 @@ function RecordItem({
               return (
                 <span key={s.id}>
                   {i > 0 && <span className="opacity-40"> → </span>}
-                  {s.name}
-                  {n > 1 && <span className="ml-0.5 text-xs text-pink">×{n}</span>}
+                  {/* 스팟 이름은 한 덩어리로 — 줄바꿈은 스팟 사이에서 일어나게 */}
+                  <span className="inline-block max-w-full truncate align-bottom">
+                    {s.name}
+                    {n > 1 && <span className="ml-0.5 text-xs text-pink">×{n}</span>}
+                  </span>
                 </span>
               );
             })}
         </p>
-        {r.memo && <p className="mt-1 text-sm opacity-70">{r.memo}</p>}
+        {r.memo && <p className="mt-1 break-words text-sm opacity-70">{r.memo}</p>}
         {total > 0 && (
           <p className="mt-2 text-xs opacity-60">
             {r.expenses.map((e) => CATEGORY_LABEL[e.category]).join(' · ')} — {total.toLocaleString()}원
@@ -111,17 +114,17 @@ function RecordItem({
 function DailyItem({ summary: s }: { summary: DailyDaySummary }) {
   const parts = [
     s.photoCount > 0 ? `사진 ${s.photoCount}장` : null,
-    s.answeredCount > 0 ? `질문 답 ${s.answeredCount}` : null,
+    s.answeredCount > 0 ? `답한 질문 ${s.answeredCount}` : null,
     s.noteCount > 0 ? `일기 ${s.noteCount}` : null,
   ].filter(Boolean);
   return (
     <li className="rounded-2xl rounded-br-md border border-ink/10 bg-white/40 px-4 py-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 flex-1 text-sm">
           <span className="text-xs opacity-50">{s.date} · 오늘</span>
           <span className="ml-2 opacity-80">{parts.join(' · ')}</span>
         </p>
-        {s.moods.length > 0 && <span className="text-base">{s.moods.join(' ')}</span>}
+        {s.moods.length > 0 && <span className="shrink-0 text-base">{s.moods.join(' ')}</span>}
       </div>
     </li>
   );

@@ -6,6 +6,7 @@ import RecordDetailSheet from './RecordDetailSheet';
 import RecordSheet from './RecordSheet';
 import Timeline from './Timeline';
 import { useConquest } from './useConquest';
+import type { RecordRow } from './useRecords';
 
 type View = 'map' | 'timeline';
 type Filter = 'all' | 'date' | 'daily';
@@ -24,6 +25,8 @@ export default function MapScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   // 지도 핀·타임라인 카드 공용 상세 시트 — 선택된 기록 id
   const [detailId, setDetailId] = useState<string | null>(null);
+  // 수정 플로우: 상세 시트의 '고치기' → 상세를 닫고 작성 시트를 수정 모드로 연다
+  const [editRecord, setEditRecord] = useState<RecordRow | null>(null);
   const { session } = useSession();
   const coupleState = useCoupleState(session?.user.id);
   const coupleId = coupleState.data?.couple?.id;
@@ -65,7 +68,7 @@ export default function MapScreen() {
             // 지도 위에 배치해 작은 화면에서도 스크롤 없이 보이고 FAB와 겹치지 않는다.
             <div className="rounded-2xl rounded-tl-md border-2 border-dashed border-pink/40 bg-white/50 px-4 py-3 text-center">
               <p className="text-sm font-semibold">🖍️ 아직 새하얀 도화지예요</p>
-              <p className="mt-0.5 text-sm opacity-60">
+              <p className="mt-0.5 break-keep text-sm opacity-60">
                 오른쪽 아래 <b className="text-pink">+</b> 를 눌러 첫 데이트 장소를 콕 찍어 볼까요?
               </p>
             </div>
@@ -102,7 +105,21 @@ export default function MapScreen() {
       </button>
 
       <RecordSheet open={sheetOpen} onClose={() => setSheetOpen(false)} coupleId={coupleId} />
-      <RecordDetailSheet recordId={detailId} onClose={() => setDetailId(null)} />
+      {/* 수정 모드 작성 시트 — 새 기록 시트와 별도 인스턴스 (닫히면 프리필 상태도 함께 리셋) */}
+      <RecordSheet
+        open={editRecord !== null}
+        onClose={() => setEditRecord(null)}
+        coupleId={coupleId}
+        editRecord={editRecord ?? undefined}
+      />
+      <RecordDetailSheet
+        recordId={detailId}
+        onClose={() => setDetailId(null)}
+        onEdit={(record) => {
+          setDetailId(null);
+          setEditRecord(record);
+        }}
+      />
     </main>
   );
 }

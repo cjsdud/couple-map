@@ -78,6 +78,32 @@ export function useCreateProfile(userId: string) {
   });
 }
 
+/**
+ * 닉네임 변경 (우리 탭 설정) — profiles는 RLS profiles_update로 본인 행만 update 허용.
+ * 성공 시 couple-state와 couple-members를 무효화해 짝꿍 화면의 내 이름도 다음 조회에 갱신된다.
+ */
+export function useUpdateNickname(userId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (nickname: string) => {
+      const sb = requireSupabase();
+      if (!userId) throw new Error('로그인 후 바꿀 수 있어요');
+      const trimmed = nickname.trim();
+      if (trimmed.length < 1 || trimmed.length > 12)
+        throw new Error('닉네임은 1~12자로 적어 주세요');
+      const { error } = await sb
+        .from('profiles')
+        .update({ nickname: trimmed })
+        .eq('user_id', userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      if (userId) void queryClient.invalidateQueries({ queryKey: coupleStateKey(userId) });
+      void queryClient.invalidateQueries({ queryKey: ['couple-members'] });
+    },
+  });
+}
+
 /** RPC create_couple() — pending 커플 생성 후 6자리 초대 코드를 돌려받는다. */
 export function useCreateCouple(userId: string) {
   const queryClient = useQueryClient();

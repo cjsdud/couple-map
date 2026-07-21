@@ -5,11 +5,14 @@ import { toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
 import {
   CATEGORY_LABEL,
+  isMock,
   useCoupleMembers,
   useCreateRecord,
+  useUpdateRecord,
   type ExpenseCategory,
   type ExpenseDraft,
   type PhotoDraft,
+  type RecordRow,
   type SpotDraft,
 } from './useRecords';
 
@@ -25,6 +28,11 @@ interface Props {
     /** 핀 승격 시 오늘 사진을 기록 사진으로 함께 가져오기 */
     photos?: PhotoDraft[];
   };
+  /**
+   * 수정 모드 — 있으면 분기 화면 없이 폼으로 직행하고 기존 값을 프리필한다.
+   * 사진은 새로 추가만 가능 (기존 사진 관리는 상세 시트의 개별 지우기).
+   */
+  editRecord?: RecordRow;
 }
 
 const MAX_SPOTS = 5;
@@ -33,10 +41,10 @@ const CATEGORIES = Object.keys(CATEGORY_LABEL) as ExpenseCategory[];
 
 /**
  * 기록 작성 바텀시트 (명세 §3.1).
- * 첫 단계에서 다녀왔어요/가고 싶어요 분기 → 스팟(1~5)·메모·지출 입력.
- * 사진 첨부는 M2 업로드 파이프라인 연동 후속.
+ * 첫 화면에서 다녀왔어요/가고 싶어요 선택 → 폼 안 세그먼트로 작성 중에도 전환 가능
+ * (입력값 유지, 지출·사진은 가고 싶어요에서 숨김 — 저장 시에도 제외).
  */
-export default function RecordSheet({ open, onClose, coupleId, initial }: Props) {
+export default function RecordSheet({ open, onClose, coupleId, initial, editRecord }: Props) {
   const [status, setStatus] = useState<'visited' | 'planned' | null>(null);
   const [date, setDate] = useState(() => toDateString(new Date()));
   const [memo, setMemo] = useState('');
@@ -44,12 +52,33 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
   const [expenses, setExpenses] = useState<ExpenseDraft[]>([]);
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
   const createRecord = useCreateRecord(coupleId);
+  const updateRecord = useUpdateRecord(coupleId);
+  const mutation = editRecord ? updateRecord : createRecord;
 
-  // 열릴 때 프리필 적용 (핀 승격: 오늘 사진 위치 → 스팟 + 사진 동반)
+  // 열릴 때 프리필 적용 (수정 모드: 기존 값 전체 / 핀 승격: 오늘 사진 위치 → 스팟 + 사진 동반)
   const [appliedOpen, setAppliedOpen] = useState(false);
   if (open && !appliedOpen) {
     setAppliedOpen(true);
-    if (initial) {
+    if (editRecord) {
+      setStatus(editRecord.status);
+      setDate(editRecord.date);
+      setMemo(editRecord.memo ?? '');
+      setSpots(
+        editRecord.spots
+          .slice()
+          .sort((a, b) => a.seq - b.seq)
+          .map((s) => ({
+            name: s.name,
+            lat: s.lat,
+            lng: s.lng,
+            sigunguCode: s.sigungu_code,
+            kakaoPlaceId: s.kakao_place_id,
+          })),
+      );
+      setExpenses(
+        editRecord.expenses.map((e) => ({ amount: e.amount, category: e.category, paidBy: e.paid_by })),
+      );
+    } else if (initial) {
       if (initial.status) setStatus(initial.status);
       if (initial.date) setDate(initial.date);
       if (initial.spots) setSpots(initial.spots);
@@ -66,20 +95,35 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
     setPhotos([]);
     setAppliedOpen(false);
     createRecord.reset();
+    updateRecord.reset();
   };
   const close = () => {
     reset();
     onClose();
   };
 
-  const canSave = status !== null && spots.length >= 1 && Boolean(supabase) && Boolean(coupleId);
+  // 수정은 ?mock=1에서도 캐시로 동작 (useUpdateRecord의 목 처리) — 새 기록은 연결 필요
+  const canSave =
+    status !== null &&
+    spots.length >= 1 &&
+    (editRecord ? isMock() || Boolean(supabase) : Boolean(supabase) && Boolean(coupleId));
 
   const save = () => {
-    if (!status || createRecord.isPending) return;
-    createRecord.mutate(
-      { status, date, memo, spots, expenses, photos },
-      { onSuccess: close },
-    );
+    if (!status || mutation.isPending) return;
+    // 가고 싶어요로 저장할 땐 숨겨 둔 지출·사진은 보내지 않는다 (토글로 되돌리면 입력값은 그대로)
+    const draft = {
+      status,
+      date,
+      memo,
+      spots,
+      expenses: status === 'visited' ? expenses : [],
+      photos: status === 'visited' ? photos : [],
+    };
+    if (editRecord) {
+      updateRecord.mutate({ recordId: editRecord.id, ...draft }, { onSuccess: close });
+    } else {
+      createRecord.mutate(draft, { onSuccess: close });
+    }
   };
 
   return (
@@ -92,7 +136,7 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
             className="w-full rounded-2xl rounded-tl-md border-2 border-pink/40 bg-white/70 p-5 text-left active:translate-y-px"
           >
             <p className="text-base font-bold text-pink">다녀왔어요</p>
-            <p className="mt-1 text-sm opacity-60">지도에 콕 — 이 동네가 우리 색으로 칠해져요</p>
+            <p className="mt-1 break-keep text-sm opacity-60">지도에 콕 — 이 동네가 우리 색으로 칠해져요</p>
           </button>
           <button
             type="button"
@@ -100,7 +144,7 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
             className="w-full rounded-2xl rounded-br-md border-2 border-ink/15 bg-white/70 p-5 text-left active:translate-y-px"
           >
             <p className="text-base font-bold">가고 싶어요</p>
-            <p className="mt-1 text-sm opacity-60">회색 핀으로 저장해 두고, 다녀오면 색이 칠해져요</p>
+            <p className="mt-1 break-keep text-sm opacity-60">회색 핀으로 저장해 두고, 다녀오면 색이 칠해져요</p>
           </button>
         </div>
       ) : (
@@ -111,13 +155,31 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
           }}
           className="space-y-5 pb-2"
         >
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold">
-              {status === 'visited' ? '다녀왔어요' : '가고 싶어요'}
-            </h2>
-            <button type="button" onClick={() => setStatus(null)} className="text-sm opacity-50">
-              ← 분기 다시 고르기
-            </button>
+          {/* 작성 중에도 전환 가능한 세그먼트 — 입력값은 유지, 지출·사진은 가고 싶어요에서 숨김(보존) */}
+          <div className="space-y-3">
+            <h2 className="pr-10 text-lg font-bold">{editRecord ? '기록 수정하기' : '새 기록'}</h2>
+            <div className="flex rounded-full border border-ink/15 bg-white/60 p-0.5 text-sm">
+              <button
+                type="button"
+                aria-pressed={status === 'visited'}
+                onClick={() => setStatus('visited')}
+                className={`flex-1 rounded-full py-2 ${
+                  status === 'visited' ? 'bg-pink font-bold text-white' : 'font-semibold opacity-60'
+                }`}
+              >
+                다녀왔어요
+              </button>
+              <button
+                type="button"
+                aria-pressed={status === 'planned'}
+                onClick={() => setStatus('planned')}
+                className={`flex-1 rounded-full py-2 ${
+                  status === 'planned' ? 'bg-ink font-bold text-paper' : 'font-semibold opacity-60'
+                }`}
+              >
+                가고 싶어요
+              </button>
+            </div>
           </div>
 
           <label className="block space-y-1.5">
@@ -130,9 +192,18 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
             />
           </label>
 
-          <SpotEditor spots={spots} onChange={setSpots} />
+          <SpotEditor spots={spots} onChange={setSpots} status={status} />
 
-          {status === 'visited' && <PhotoPicker photos={photos} spots={spots} onChange={setPhotos} />}
+          {status === 'visited' && (
+            <div className="space-y-1">
+              <PhotoPicker photos={photos} spots={spots} onChange={setPhotos} />
+              {editRecord && (
+                <p className="break-keep text-xs opacity-50">
+                  여기서는 새 사진만 더할 수 있어요 — 이미 넣은 사진은 기록을 열어서 지울 수 있어요
+                </p>
+              )}
+            </div>
+          )}
 
           <label className="block space-y-1.5">
             <span className="text-sm font-semibold">한 줄 메모</span>
@@ -140,27 +211,36 @@ export default function RecordSheet({ open, onClose, coupleId, initial }: Props)
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
               maxLength={80}
-              placeholder="오늘 어땠는지 한 줄로!"
+              placeholder={status === 'visited' ? '오늘 어땠는지 한 줄로!' : '왜 가고 싶은지 한 줄로!'}
               className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink"
             />
           </label>
 
           {status === 'visited' && <ExpenseEditor expenses={expenses} onChange={setExpenses} />}
 
-          {createRecord.isError && (
+          {mutation.isError && (
             <p className="text-sm text-pink">
-              저장하다 문제가 있었어요. 다시 한 번 시도해 주세요.
+              저장하다가 문제가 생겼어요. 다시 한 번 해 주세요.
             </p>
           )}
-          {!supabase && (
-            <p className="text-sm opacity-50">Supabase 연결 후 저장할 수 있어요 (데모 모드)</p>
-          )}
+          {!supabase &&
+            (editRecord && isMock() ? (
+              <p className="text-sm opacity-50">미리보기라서 수정한 내용은 이 화면에서만 보여요</p>
+            ) : (
+              <p className="text-sm opacity-50">미리보기라서 아직 저장은 안 돼요</p>
+            ))}
           <button
             type="submit"
-            disabled={!canSave || createRecord.isPending}
+            disabled={!canSave || mutation.isPending}
             className="w-full rounded-2xl rounded-tl-md bg-pink px-6 py-3.5 text-base font-bold text-white shadow-sm active:translate-y-px disabled:opacity-40"
           >
-            {createRecord.isPending ? '콕 찍는 중…' : '도화지에 콕!'}
+            {mutation.isPending
+              ? editRecord
+                ? '저장하는 중…'
+                : '콕 찍는 중…'
+              : editRecord
+                ? '이대로 저장하기'
+                : '도화지에 콕!'}
           </button>
         </form>
       )}
@@ -192,13 +272,12 @@ function PhotoPicker({
           {photos.map((p, i) => (
             <li key={`${p.file.name}-${i}`} className="space-y-1 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2">
               <div className="flex items-center gap-2 text-xs">
-                <span aria-hidden>🖼️</span>
-                <span className="flex-1 truncate">{p.file.name}</span>
+                <span className="min-w-0 flex-1 truncate">{p.file.name}</span>
                 <button
                   type="button"
                   aria-label={`${p.file.name} 빼기`}
                   onClick={() => onChange(photos.filter((_, j) => j !== i))}
-                  className="px-1 opacity-40"
+                  className="-my-1 -mr-1.5 shrink-0 p-1.5 opacity-40"
                 >
                   ✕
                 </button>
@@ -212,7 +291,7 @@ function PhotoPicker({
                       p.spotIndex === null ? 'bg-ink text-paper' : 'border border-ink/15 opacity-60'
                     }`}
                   >
-                    어디든
+                    스팟 없이
                   </button>
                   {spots.map((s, si) => (
                     <button
@@ -258,7 +337,15 @@ function PhotoPicker({
 }
 
 // ── 스팟 입력 (1~5개): 장소 검색 + 지금 여기 ─────────────────────
-function SpotEditor({ spots, onChange }: { spots: SpotDraft[]; onChange: (s: SpotDraft[]) => void }) {
+function SpotEditor({
+  spots,
+  onChange,
+  status,
+}: {
+  spots: SpotDraft[];
+  onChange: (s: SpotDraft[]) => void;
+  status: 'visited' | 'planned';
+}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<KakaoPlace[] | null>(null);
   const [busy, setBusy] = useState<'search' | 'here' | null>(null);
@@ -328,7 +415,10 @@ function SpotEditor({ spots, onChange }: { spots: SpotDraft[]; onChange: (s: Spo
   return (
     <div className="space-y-2">
       <span className="text-sm font-semibold">
-        스팟 <span className="opacity-50">({spots.length}/{MAX_SPOTS} · 같은 날 코스 순서대로)</span>
+        스팟{' '}
+        <span className="opacity-50">
+          ({spots.length}/{MAX_SPOTS} · {status === 'visited' ? '함께 간 순서대로' : '가고 싶은 순서대로'})
+        </span>
       </span>
 
       {spots.length > 0 && (
@@ -339,12 +429,12 @@ function SpotEditor({ spots, onChange }: { spots: SpotDraft[]; onChange: (s: Spo
               className="flex items-center gap-2 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2 text-sm"
             >
               <span className="font-bold text-pink">{i + 1}</span>
-              <span className="flex-1 truncate">{s.name}</span>
+              <span className="min-w-0 flex-1 truncate">{s.name}</span>
               <button
                 type="button"
                 aria-label={`${s.name} 빼기`}
                 onClick={() => onChange(spots.filter((_, j) => j !== i))}
-                className="px-1 opacity-40"
+                className="-my-1.5 -mr-1.5 shrink-0 p-1.5 opacity-40"
               >
                 ✕
               </button>
@@ -392,7 +482,11 @@ function SpotEditor({ spots, onChange }: { spots: SpotDraft[]; onChange: (s: Spo
 
       {results && (
         <ul className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-ink/10 bg-white/80 p-1.5">
-          {results.length === 0 && <li className="px-2 py-1.5 text-sm opacity-50">검색 결과가 없어요</li>}
+          {results.length === 0 && (
+            <li className="px-2 py-1.5 text-sm opacity-50">
+              검색 결과가 없어요 — 다른 이름으로 찾아볼까요?
+            </li>
+          )}
           {results.map((p) => (
             <li key={p.id}>
               <button
@@ -400,8 +494,8 @@ function SpotEditor({ spots, onChange }: { spots: SpotDraft[]; onChange: (s: Spo
                 onClick={() => addPlace(p)}
                 className="w-full rounded-lg px-2 py-1.5 text-left text-sm active:bg-ink/5"
               >
-                <p className="font-semibold">{p.placeName}</p>
-                <p className="text-xs opacity-50">{p.roadAddressName || p.addressName}</p>
+                <p className="truncate font-semibold">{p.placeName}</p>
+                <p className="truncate text-xs opacity-50">{p.roadAddressName || p.addressName}</p>
               </button>
             </li>
           ))}
@@ -450,7 +544,7 @@ function ExpenseEditor({
                 type="button"
                 aria-label="지출 빼기"
                 onClick={() => onChange(expenses.filter((_, j) => j !== i))}
-                className="px-1 opacity-40"
+                className="-my-1.5 -mr-1.5 shrink-0 p-1.5 opacity-40"
               >
                 ✕
               </button>

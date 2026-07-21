@@ -77,7 +77,7 @@ function Gate() {
     return (
       <>
         <div className="sticky top-0 z-50 bg-sky/60 px-4 py-1.5 text-center text-xs font-semibold">
-          미리보기 모드 — 예시 데이터라 저장되지 않아요
+          미리보기 모드 — 예시 화면이라 저장되지 않아요
         </div>
         <AppShell />
       </>
@@ -88,7 +88,7 @@ function Gate() {
     return (
       <>
         <div className="sticky top-0 z-50 bg-yellow/80 px-4 py-1.5 text-center text-xs font-semibold">
-          데모 모드 — Supabase 미연결이라 저장되지 않아요
+          데모 모드 — 서버와 연결되기 전이라 저장되지 않아요
         </div>
         <AppShell />
       </>

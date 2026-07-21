@@ -134,12 +134,18 @@ export interface TodayDraft {
   mood: string | null;
   answer: string;
   note: string;
+  /**
+   * 수정 모드: 비운 항목도 비운 대로 덮어쓴다 (신규 저장은 채운 항목만 반영).
+   * 답을 비우면 has_answer가 풀려 짝꿍의 답도 다시 잠긴다 — 뷰(0002_rls)가 자동 처리.
+   */
+  overwrite?: boolean;
 }
 
 /**
- * 오늘 통합 저장: 기분·질문 답·한 줄 일기를 daily_entries 1행에 한 번에.
+ * 오늘 통합 저장·수정: 기분·질문 답·한 줄 일기를 daily_entries 1행에 한 번에.
  * answer는 컬럼 권한 체계(select 제외 컬럼) 특성상 insert-with-answer가 아닌
  * ensureMyEntry(upsert) → update 경로로만 쓴다.
+ * 수정도 같은 경로 — RLS daily_entries_update(본인 행)가 이미 허용하는 검증된 길이다.
  */
 export function useSaveToday(ctx: {
   coupleId?: string;
@@ -149,21 +155,37 @@ export function useSaveToday(ctx: {
 }) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ mood, answer, note }: TodayDraft) => {
+    mutationFn: async ({ mood, answer, note, overwrite }: TodayDraft) => {
       if (!supabase || !ctx.coupleId || !ctx.userId) throw new Error('Supabase 연결 후 남길 수 있어요');
-      const patch: { mood?: string; answer?: string; question_id?: number | null; note?: string } = {};
-      if (mood) patch.mood = mood;
-      if (answer.trim()) {
-        patch.answer = answer.trim();
-        patch.question_id = ctx.questionId;
+      const trimmedAnswer = answer.trim();
+      const trimmedNote = note.trim();
+      if (!mood && !trimmedAnswer && !trimmedNote)
+        throw new Error('기분·답·일기 중 하나는 채워 주세요');
+      const patch: {
+        mood?: string | null;
+        answer?: string | null;
+        question_id?: number | null;
+        note?: string | null;
+      } = {};
+      if (overwrite) {
+        // 수정: 세 항목 전부 그대로 덮어쓴다 — 비운 항목은 null로 지운다
+        patch.mood = mood;
+        patch.answer = trimmedAnswer || null;
+        patch.question_id = trimmedAnswer ? ctx.questionId : null;
+        patch.note = trimmedNote || null;
+      } else {
+        if (mood) patch.mood = mood;
+        if (trimmedAnswer) {
+          patch.answer = trimmedAnswer;
+          patch.question_id = ctx.questionId;
+        }
+        if (trimmedNote) patch.note = trimmedNote;
       }
-      if (note.trim()) patch.note = note.trim();
-      if (Object.keys(patch).length === 0) throw new Error('기분·답·일기 중 하나는 채워 주세요');
       const entryId = await ensureMyEntry(
         ctx.coupleId,
         ctx.userId,
         ctx.entryDate,
-        answer.trim() ? ctx.questionId : null,
+        trimmedAnswer ? ctx.questionId : null,
       );
       const { error } = await supabase.from('daily_entries').update(patch).eq('id', entryId);
       if (error) throw error;

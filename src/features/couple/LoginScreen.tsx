@@ -75,7 +75,7 @@ function DevLogin() {
         onChange={(e) => setEmail(e.target.value)}
         placeholder="이메일"
         autoComplete="username"
-        className="w-full rounded-xl border-2 border-ink/15 bg-white/80 px-3 py-2 text-sm outline-none focus:border-pink"
+        className="w-full rounded-xl border-2 border-ink/15 bg-white/80 px-3 py-2 outline-none focus:border-pink"
       />
       <input
         type="password"
@@ -83,7 +83,7 @@ function DevLogin() {
         onChange={(e) => setPassword(e.target.value)}
         placeholder="비밀번호"
         autoComplete="current-password"
-        className="w-full rounded-xl border-2 border-ink/15 bg-white/80 px-3 py-2 text-sm outline-none focus:border-pink"
+        className="w-full rounded-xl border-2 border-ink/15 bg-white/80 px-3 py-2 outline-none focus:border-pink"
       />
       {error && <p className="text-xs text-pink">{error}</p>}
       <button
