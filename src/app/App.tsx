@@ -36,18 +36,16 @@ function Splash({ label = '도화지를 펼치는 중…' }: { label?: string })
 
 /** 카카오 리다이렉트 복귀(/kakao?code=…) → 자체 계정 세션 수립 후 홈으로 */
 function KakaoCallback() {
-  const [failed, setFailed] = useState(false);
+  // code 부재는 렌더 전에 판정 (effect 내 동기 setState 회피)
+  const [code] = useState(() => new URLSearchParams(window.location.search).get('code'));
+  const [failed, setFailed] = useState(code === null);
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('code');
-    if (!code) {
-      setFailed(true);
-      return;
-    }
+    if (!code) return;
     void completeKakaoLogin(code).then((ok) => {
       if (ok) window.location.replace('/');
       else setFailed(true);
     });
-  }, []);
+  }, [code]);
   if (failed) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-3 px-6 text-center">
