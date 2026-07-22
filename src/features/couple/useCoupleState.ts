@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../shared/lib/supabase';
+import { useSession } from '../../shared/lib/auth';
+import type { CoupleTheme } from '../../shared/lib/theme';
 
 export interface Profile {
   user_id: string;
@@ -16,6 +18,8 @@ export interface Couple {
   day_cutoff: number;
   /** 부담 비율 (user_a %) — 가계부 밸런스(M3) */
   ratio_a: number;
+  /** 도화지 꾸미기 (0011 이전 프로젝트에서는 undefined일 수 있음) */
+  theme?: CoupleTheme | null;
 }
 
 export interface CoupleState {
@@ -42,7 +46,7 @@ async function fetchCoupleState(userId: string): Promise<CoupleState> {
 
   const { data: couple, error: coupleError } = await sb
     .from('couples')
-    .select('id, invite_code, status, started_at, day_cutoff, ratio_a')
+    .select('*') // theme(0011) 미적용 프로젝트에서도 깨지지 않게 전체 컬럼
     .eq('id', profile.couple_id)
     .maybeSingle<Couple>();
   if (coupleError) throw coupleError;
@@ -151,6 +155,13 @@ export function useSetStartedAt(userId: string) {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: coupleStateKey(userId) }),
   });
+}
+
+/** 지도 렌더용 커플 테마 (미로그인·목 모드는 기본 테마) */
+export function useCoupleTheme(): CoupleTheme | null {
+  const { session } = useSession();
+  const coupleQuery = useCoupleState(session?.user.id);
+  return coupleQuery.data?.couple?.theme ?? null;
 }
 
 // ── 사귄 날 입력 "나중에 할게요" 로컬 플래그 ──────────────────────

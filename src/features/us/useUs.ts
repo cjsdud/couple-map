@@ -79,6 +79,8 @@ export interface CoupleSettingsPatch {
   day_cutoff?: number;
   ratio_a?: number;
   started_at?: string;
+  /** 도화지 꾸미기 (0011) */
+  theme?: import('../../shared/lib/theme').CoupleTheme;
 }
 
 export function useUpdateCouple(coupleId: string | undefined, userId: string | undefined) {

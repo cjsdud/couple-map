@@ -1,8 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { signOut, useSession } from '../../shared/lib/auth';
-import { toDateString } from '../../shared/lib/daily';
+import { calcStreak, entryDateFor, toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
-import { useCoupleState, useUpdateNickname } from '../couple/useCoupleState';
+import {
+  isUnlocked,
+  PAPER_TONES,
+  PIN_STYLES,
+  pinStyle,
+  type CoupleTheme,
+} from '../../shared/lib/theme';
+import { useCoupleState, useUpdateNickname, type Couple } from '../couple/useCoupleState';
+import { useStreakDays } from '../today/useToday';
 import { categoryLabel, useCoupleMembers } from '../map/useRecords';
 import { dPlus, upcomingMilestones, useMonthlyExpenses, useUpdateCouple } from './useUs';
 
@@ -22,6 +30,7 @@ export default function UsScreen() {
       <h1 className="text-2xl font-bold">우리</h1>
       <DdayCard startedAt={startedAt} today={today} />
       <ExpenseMonthCard today={today} />
+      <ThemeCard couple={couple} userId={userId} mock={isMock} />
       <SettingsCard
         coupleId={couple?.id}
         userId={userId}
@@ -69,6 +78,108 @@ function DdayCard({ startedAt, today }: { startedAt: string | null; today: strin
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+// ── 도화지 꾸미기: 핀 모양·배경 톤 (A안 — 스트릭으로 해금, 명세 §3.2 보상) ──
+const PIN_SYMBOL: Record<string, string> = { dot: '●', heart: '♥', star: '★', tape: '▬' };
+
+function ThemeCard({
+  couple,
+  userId,
+  mock,
+}: {
+  couple: Couple | null;
+  userId: string | undefined;
+  mock: boolean;
+}) {
+  const update = useUpdateCouple(couple?.id, userId);
+  const theme: CoupleTheme = couple?.theme ?? {};
+  const entryDate = entryDateFor(new Date(), couple?.day_cutoff ?? 0);
+  const streakDays = useStreakDays(couple?.id, entryDate).data ?? [];
+  const streak = calcStreak(streakDays.map((g) => ({ date: g.date, bothFilled: g.level === 'both' })));
+
+  // 최고 스트릭 영구 기록 — 한 번 해금된 꾸미기는 스트릭이 끊겨도 유지된다
+  useEffect(() => {
+    if (!supabase || !couple?.id || mock || update.isPending) return;
+    if (streak > (theme.maxStreak ?? 0)) {
+      update.mutate({ theme: { ...theme, maxStreak: streak } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streak, theme.maxStreak, couple?.id, mock]);
+
+  const disabled = !supabase || !couple?.id || mock || update.isPending;
+  const pick = (patch: Partial<CoupleTheme>) => update.mutate({ theme: { ...theme, ...patch } });
+  const currentPin = pinStyle(theme);
+  const currentPaper = theme.paper ?? 'paper';
+
+  return (
+    <section className="space-y-3 rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/60 p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">도화지 꾸미기</h2>
+        <span className="text-xs opacity-50">둘이 함께 쓰는 테마예요</span>
+      </div>
+
+      <div className="space-y-1.5">
+        <span className="text-sm">핀 모양</span>
+        <div className="flex flex-wrap gap-1.5">
+          {PIN_STYLES.map((p) => {
+            const unlocked = isUnlocked(p, theme, streak);
+            const selected = currentPin === p.key;
+            return (
+              <button
+                key={p.key}
+                type="button"
+                disabled={disabled || !unlocked}
+                onClick={() => pick({ pin: p.key })}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm ${
+                  selected ? 'bg-pink font-bold text-white' : 'border border-ink/15 bg-white/60'
+                } ${!unlocked ? 'opacity-45' : ''}`}
+              >
+                <span aria-hidden className={selected ? '' : 'text-pink'}>{PIN_SYMBOL[p.key]}</span>
+                {p.label}
+                {!unlocked && <span className="text-[11px] opacity-70">🔒 {p.unlock}일</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <span className="text-sm">도화지 톤</span>
+        <div className="flex flex-wrap gap-2">
+          {PAPER_TONES.map((t) => {
+            const unlocked = isUnlocked(t, theme, streak);
+            const selected = currentPaper === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                disabled={disabled || !unlocked}
+                onClick={() => pick({ paper: t.key })}
+                aria-label={`도화지 톤 ${t.label}`}
+                className={`flex flex-col items-center gap-1 ${!unlocked ? 'opacity-45' : ''}`}
+              >
+                <span
+                  className={`h-9 w-9 rounded-full rounded-tl-md border-2 ${
+                    selected ? 'border-pink' : 'border-ink/15'
+                  }`}
+                  style={{ backgroundColor: t.color }}
+                />
+                <span className="text-[11px] opacity-70">
+                  {unlocked ? t.label : `🔒 ${t.unlock}일`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <p className="break-keep text-xs opacity-50">
+        둘 다 채운 날이 이어지면 새 꾸미기가 열려요 — 지금까지 최고 {Math.max(theme.maxStreak ?? 0, streak)}일
+      </p>
+      {mock && <p className="text-xs opacity-50">미리보기예요 — 저장은 짝꿍과 연결한 뒤에 할 수 있어요</p>}
     </section>
   );
 }

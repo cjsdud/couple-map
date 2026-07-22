@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { paperColor, pinStyle } from '../../shared/lib/theme';
+import { useCoupleTheme } from '../couple/useCoupleState';
 import { useConquest } from './useConquest';
 import { useRecords } from './useRecords';
 
@@ -207,6 +209,9 @@ export default function ConquestMap({
   onSelectRecord?: (recordId: string) => void;
 }) {
   const { visitCounts } = useConquest();
+  const theme = useCoupleTheme();
+  const paper = paperColor(theme);
+  const pin = pinStyle(theme);
   const { data: geo } = useQuery({
     queryKey: ['sigungu-geo'],
     queryFn: async (): Promise<SigunguGeo> => {
@@ -259,7 +264,7 @@ export default function ConquestMap({
               <g key={p.code}>
                 <path
                   d={p.d}
-                  fill="#fdfcf7"
+                  fill={paper}
                   stroke="#3b3733"
                   strokeOpacity="0.25"
                   strokeWidth="1"
@@ -274,7 +279,7 @@ export default function ConquestMap({
             );
           })}
         </g>
-        <SpotOverlay toXY={projected.toXY} onSelectRecord={onSelectRecord} scaleFactor={scaleFactor} />
+        <SpotOverlay toXY={projected.toXY} onSelectRecord={onSelectRecord} scaleFactor={scaleFactor} pin={pin} />
       </svg>
 
       {/* 줌 컨트롤 — 핀치가 어려운 환경 대비 */}
@@ -311,15 +316,52 @@ export default function ConquestMap({
 }
 
 /** 기록 스팟 점 + 같은 기록 스팟의 점선 연결 (명세 §3.1 데이트 기록 핀) — 점 탭 시 기록 상세 */
+/** 핀 모양 렌더 (도화지 꾸미기 A안) — 화면상 크기가 일정하도록 좌표를 직접 계산 */
+function PinShape({ style, x, y, r, color, sf }: { style: string; x: number; y: number; r: number; color: string; sf: number }) {
+  const stroke = { stroke: '#fdfcf7', strokeWidth: 2 * sf, strokeLinejoin: 'round' as const };
+  if (style === 'heart') {
+    const d = `M ${x} ${y + r * 1.25} C ${x - r * 2.1} ${y - r * 0.7}, ${x - r * 0.7} ${y - r * 1.7}, ${x} ${y - r * 0.4} C ${x + r * 0.7} ${y - r * 1.7}, ${x + r * 2.1} ${y - r * 0.7}, ${x} ${y + r * 1.25} Z`;
+    return <path d={d} fill={color} {...stroke} />;
+  }
+  if (style === 'star') {
+    const pts: string[] = [];
+    for (let i = 0; i < 10; i += 1) {
+      const angle = ((-90 + i * 36) * Math.PI) / 180;
+      const rad = i % 2 === 0 ? r * 1.55 : r * 0.7;
+      pts.push(`${x + Math.cos(angle) * rad},${y + Math.sin(angle) * rad}`);
+    }
+    return <polygon points={pts.join(' ')} fill={color} {...stroke} />;
+  }
+  if (style === 'tape') {
+    return (
+      <rect
+        x={x - r * 1.7}
+        y={y - r * 0.95}
+        width={r * 3.4}
+        height={r * 1.9}
+        rx={r * 0.25}
+        transform={`rotate(-8 ${x} ${y})`}
+        fill={color}
+        opacity={0.92}
+        {...stroke}
+      />
+    );
+  }
+  return <circle cx={x} cy={y} r={r} fill={color} stroke="#fdfcf7" strokeWidth={2.5 * sf} />;
+}
+
 function SpotOverlay({
   toXY,
   onSelectRecord,
   scaleFactor,
+  pin,
 }: {
   toXY: (lng: number, lat: number) => [number, number];
   onSelectRecord?: (recordId: string) => void;
   /** 줌 배율 보정 — 확대해도 점 크기가 화면상 일정하게 */
   scaleFactor: number;
+  /** 핀 모양 (도화지 꾸미기) */
+  pin: string;
 }) {
   const { data: records = [] } = useRecords();
   const r = 6 * scaleFactor;
@@ -359,7 +401,7 @@ function SpotOverlay({
                 className={onSelectRecord ? 'cursor-pointer' : undefined}
               >
                 <title>{p.s.name}</title>
-                <circle cx={p.xy[0]} cy={p.xy[1]} r={r} fill={color} stroke="#fdfcf7" strokeWidth={2.5 * scaleFactor} />
+                <PinShape style={pin} x={p.xy[0]} y={p.xy[1]} r={r} color={color} sf={scaleFactor} />
                 {showLabels && (
                   // 종이색 테두리 글자 — 경계선 위에서도 읽히게 (화면상 크기 일정)
                   <text
