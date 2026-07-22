@@ -85,6 +85,57 @@ function useProjectedPaths(geo: SigunguGeo | undefined) {
   }, [geo]);
 }
 
+/** 행정동(3,558개) — 깊은 확대에서만 지연 로드해 시 내부를 세분화 */
+function useDongFeatures(toXY: ((lng: number, lat: number) => [number, number]) | undefined, enabled: boolean) {
+  const { data: geo } = useQuery({
+    queryKey: ['dong-geo'],
+    queryFn: async (): Promise<{ features: { properties: { name: string }; geometry: SigunguFeature['geometry'] }[] }> => {
+      const res = await fetch('/geo/dong.json');
+      if (!res.ok) throw new Error(`행정동 경계 로드 실패: ${res.status}`);
+      return res.json();
+    },
+    staleTime: Infinity,
+    enabled,
+  });
+  return useMemo(() => {
+    if (!geo || !toXY) return null;
+    const toSvg = (pt: [number, number]) => {
+      const [x, y] = toXY(pt[0], pt[1]);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    };
+    return geo.features.map((f) => {
+      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      let bestArea = -1;
+      let cx = 0;
+      let cy = 0;
+      const d = polys
+        .flatMap((poly) =>
+          poly.map((ring, ringIdx) => {
+            if (ringIdx === 0) {
+              let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+              for (const pt of ring) {
+                const [px, py] = toXY(pt[0], pt[1]);
+                if (px < mnx) mnx = px;
+                if (px > mxx) mxx = px;
+                if (py < mny) mny = py;
+                if (py > mxy) mxy = py;
+              }
+              const area = (mxx - mnx) * (mxy - mny);
+              if (area > bestArea) {
+                bestArea = area;
+                cx = (mnx + mxx) / 2;
+                cy = (mny + mxy) / 2;
+              }
+            }
+            return `M${ring.map(toSvg).join('L')}Z`;
+          }),
+        )
+        .join('');
+      return { name: f.properties.name, d, cx, cy };
+    });
+  }, [geo, toXY]);
+}
+
 /** 시·도 경계(17개) — 굵은 선 한 겹으로 '지도' 인상을 만든다 */
 function useSidoPaths(toXY: ((lng: number, lat: number) => [number, number]) | undefined) {
   const { data: geo } = useQuery({
@@ -237,6 +288,7 @@ function useZoomPan(viewH: number) {
 
   return {
     svgRef,
+    vb,
     viewBoxAttr: `${vb.x.toFixed(1)} ${vb.y.toFixed(1)} ${vb.w.toFixed(1)} ${(vb.w * aspect).toFixed(1)}`,
     scaleFactor: vb.w / VIEW_W,
     zoomed: vb.w < VIEW_W,
@@ -273,11 +325,19 @@ export default function ConquestMap({
   });
   const projected = useProjectedPaths(geo);
   const sidoPaths = useSidoPaths(projected?.toXY);
-  const { svgRef, viewBoxAttr, scaleFactor, zoomed, zoomCenter, reset, handlers } = useZoomPan(
+  const { svgRef, vb, viewBoxAttr, scaleFactor, zoomed, zoomCenter, reset, handlers } = useZoomPan(
     projected?.viewH ?? VIEW_W,
   );
-  // 시군구 이름은 2.6배부터 (더 확대하면 스팟 라벨과 함께 보인다)
+  // 시군구 이름은 2.6배부터, 동 경계는 4배부터(지연 로드), 동 이름은 6.5배부터
   const showRegionNames = scaleFactor <= 1 / 2.6;
+  const showDong = scaleFactor <= 1 / 4;
+  const showDongNames = scaleFactor <= 1 / 6.5;
+  const dongFeatures = useDongFeatures(projected?.toXY, showDong);
+  // 라벨은 현재 화면 안의 지역만 — 경계 밖에 걸친 글자 방지
+  const viewH = projected?.viewH ?? VIEW_W;
+  const vbH = vb.w * (viewH / VIEW_W);
+  const inView = (cx: number, cy: number) =>
+    cx >= vb.x && cx <= vb.x + vb.w && cy >= vb.y && cy <= vb.y + vbH;
 
   if (!projected) {
     return (
@@ -332,7 +392,23 @@ export default function ConquestMap({
             );
           })}
         </g>
-        {/* 시·도 경계 — 굵은 한 겹으로 지도 인상 강화 */}
+        {/* 행정동 경계 — 깊은 확대에서 시 안을 세분화 (실선보다 옅은 헤어라인) */}
+        {showDong && dongFeatures && (
+          <g pointerEvents="none">
+            {dongFeatures.map((f, i) => (
+              <path
+                key={i}
+                d={f.d}
+                fill="none"
+                stroke="#3b3733"
+                strokeOpacity="0.13"
+                strokeWidth="0.8"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </g>
+        )}
+        {/* 시·도 경계 — 한 겹으로 지도 인상 강화 */}
         <g>
           {sidoPaths.map((d, i) => (
             <path
@@ -340,33 +416,60 @@ export default function ConquestMap({
               d={d}
               fill="none"
               stroke="#3b3733"
-              strokeOpacity="0.45"
-              strokeWidth="1.6"
+              strokeOpacity="0.3"
+              strokeWidth="1.05"
               vectorEffect="non-scaling-stroke"
             />
           ))}
         </g>
-        {/* 확대하면 시군구 이름 — 카카오맵처럼 지역명이 읽히게 */}
+        {/* 확대하면 시군구 이름 — 화면 안의 지역만 (경계 밖 글자 방지) */}
         {showRegionNames && (
           <g pointerEvents="none">
-            {projected.paths.map((p) => (
-              <text
-                key={`label-${p.code}`}
-                x={p.cx}
-                y={p.cy}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontSize={13 * scaleFactor}
-                fontWeight={600}
-                fill="#3b3733"
-                opacity={0.55}
-                stroke={paper}
-                strokeWidth={3 * scaleFactor}
-                paintOrder="stroke"
-              >
-                {p.name}
-              </text>
-            ))}
+            {projected.paths
+              .filter((p) => inView(p.cx, p.cy))
+              .map((p) => (
+                <text
+                  key={`label-${p.code}`}
+                  x={p.cx}
+                  y={p.cy}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={12 * scaleFactor}
+                  fontWeight={600}
+                  fill="#3b3733"
+                  opacity={0.55}
+                  stroke={paper}
+                  strokeWidth={3 * scaleFactor}
+                  paintOrder="stroke"
+                >
+                  {p.name}
+                </text>
+              ))}
+          </g>
+        )}
+        {/* 동 이름 — 아주 깊은 확대에서만, 화면 안만 */}
+        {showDongNames && dongFeatures && (
+          <g pointerEvents="none">
+            {dongFeatures
+              .filter((f) => inView(f.cx, f.cy))
+              .map((f, i) => (
+                <text
+                  key={`dong-${i}`}
+                  x={f.cx}
+                  y={f.cy}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={10 * scaleFactor}
+                  fontWeight={500}
+                  fill="#3b3733"
+                  opacity={0.38}
+                  stroke={paper}
+                  strokeWidth={2.5 * scaleFactor}
+                  paintOrder="stroke"
+                >
+                  {f.name}
+                </text>
+              ))}
           </g>
         )}
         <SpotOverlay toXY={projected.toXY} onSelectRecord={onSelectRecord} scaleFactor={scaleFactor} pin={pin} />
