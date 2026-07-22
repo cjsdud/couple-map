@@ -1,12 +1,26 @@
 import { useState } from 'react';
 import { useSession } from '../../shared/lib/auth';
+import { KAKAO_JS_KEY } from '../../shared/lib/kakaoMap';
 import { useCoupleState } from '../couple/useCoupleState';
 import ConquestMap from './ConquestMap';
+import KakaoBaseMap from './KakaoBaseMap';
 import RecordDetailSheet from './RecordDetailSheet';
 import RecordSheet from './RecordSheet';
 import Timeline from './Timeline';
 import { useConquest } from './useConquest';
 import type { RecordRow } from './useRecords';
+
+type MapMode = 'real' | 'paper';
+const MAP_MODE_KEY = 'dohwaji:mapMode';
+
+function initialMapMode(): MapMode {
+  if (!KAKAO_JS_KEY) return 'paper';
+  try {
+    return localStorage.getItem(MAP_MODE_KEY) === 'paper' ? 'paper' : 'real';
+  } catch {
+    return 'real';
+  }
+}
 
 type View = 'map' | 'timeline';
 type Filter = 'all' | 'date' | 'daily';
@@ -21,7 +35,16 @@ const FILTERS: { key: Filter; label: string }[] = [
 export default function MapScreen() {
   const { ratio, visitedCount, totalCount } = useConquest();
   const [view, setView] = useState<View>('map');
+  const [mapMode, setMapMode] = useState<MapMode>(initialMapMode);
   const [filter, setFilter] = useState<Filter>('all');
+  const pickMapMode = (mode: MapMode) => {
+    setMapMode(mode);
+    try {
+      localStorage.setItem(MAP_MODE_KEY, mode);
+    } catch {
+      // 저장 실패해도 이번 세션에서는 유지
+    }
+  };
   const [sheetOpen, setSheetOpen] = useState(false);
   // 지도 핀·타임라인 카드 공용 상세 시트 — 선택된 기록 id
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -63,6 +86,26 @@ export default function MapScreen() {
 
       {view === 'map' ? (
         <>
+          {KAKAO_JS_KEY && (
+            <div className="flex justify-end">
+              <div className="flex rounded-full border border-ink/15 bg-white/60 p-0.5 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => pickMapMode('real')}
+                  className={`rounded-full px-3 py-1 ${mapMode === 'real' ? 'bg-green text-white' : 'opacity-60'}`}
+                >
+                  실지도
+                </button>
+                <button
+                  type="button"
+                  onClick={() => pickMapMode('paper')}
+                  className={`rounded-full px-3 py-1 ${mapMode === 'paper' ? 'bg-green text-white' : 'opacity-60'}`}
+                >
+                  도화지
+                </button>
+              </div>
+            </div>
+          )}
           {visitedCount === 0 && (
             // 첫 실행 행동 유도 (IA 원칙 4: 투어 대신 그 자리에서) — 첫 핀이 생기면 사라진다.
             // 지도 위에 배치해 작은 화면에서도 스크롤 없이 보이고 FAB와 겹치지 않는다.
@@ -73,7 +116,11 @@ export default function MapScreen() {
               </p>
             </div>
           )}
-          <ConquestMap onSelectRecord={setDetailId} />
+          {mapMode === 'real' && KAKAO_JS_KEY ? (
+            <KakaoBaseMap onSelectRecord={setDetailId} />
+          ) : (
+            <ConquestMap onSelectRecord={setDetailId} />
+          )}
         </>
       ) : (
         <>
