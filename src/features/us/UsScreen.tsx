@@ -3,6 +3,7 @@ import { signOut, useSession } from '../../shared/lib/auth';
 import { calcStreak, entryDateFor, toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
 import {
+  BETA_ALL_UNLOCKED,
   isUnlocked,
   PAPER_TONES,
   PIN_STYLES,
@@ -83,7 +84,7 @@ function DdayCard({ startedAt, today }: { startedAt: string | null; today: strin
 }
 
 // ── 도화지 꾸미기: 핀 모양·배경 톤 (A안 — 스트릭으로 해금, 명세 §3.2 보상) ──
-const PIN_SYMBOL: Record<string, string> = { dot: '●', heart: '♥', star: '★', tape: '▬' };
+const PIN_SYMBOL: Record<string, string> = { dot: '📍', heart: '♥', star: '★', tape: '▬' };
 
 function ThemeCard({
   couple,
@@ -177,7 +178,9 @@ function ThemeCard({
       </div>
 
       <p className="break-keep text-xs opacity-50">
-        둘 다 채운 날이 이어지면 새 꾸미기가 열려요 — 지금까지 최고 {Math.max(theme.maxStreak ?? 0, streak)}일
+        {BETA_ALL_UNLOCKED
+          ? '베타 기간이라 모든 꾸미기가 열려 있어요'
+          : `둘 다 채운 날이 이어지면 새 꾸미기가 열려요 — 지금까지 최고 ${Math.max(theme.maxStreak ?? 0, streak)}일`}
       </p>
       {mock && <p className="text-xs opacity-50">미리보기예요 — 저장은 짝꿍과 연결한 뒤에 할 수 있어요</p>}
     </section>

@@ -17,7 +17,9 @@ interface SigunguGeo {
 }
 
 const VIEW_W = 800;
-const MAX_ZOOM = 8;
+const MAX_ZOOM = 16;
+/** 바다 — 수채화 톤 (도화지 감성 유지하면서 육지/바다 대비로 지도답게) */
+const SEA_COLOR = '#e2edf3';
 
 /** 위도 36° 기준 등장방형 근사 — 정복 개요 지도용으로 충분, SDK 불필요 (tech-design §3) */
 function useProjectedPaths(geo: SigunguGeo | undefined) {
@@ -50,13 +52,61 @@ function useProjectedPaths(geo: SigunguGeo | undefined) {
     };
     const paths = geo.features.map((f) => {
       const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      // 지역 이름 라벨용 중심점: 가장 큰 폴리곤(본체)의 bbox 중심 (섬 딸린 지역 보정)
+      let bestArea = -1;
+      let cx = 0;
+      let cy = 0;
       const d = polys
-        .flatMap((poly) => poly.map((ring) => `M${ring.map(toSvg).join('L')}Z`))
+        .flatMap((poly) =>
+          poly.map((ring, ringIdx) => {
+            if (ringIdx === 0) {
+              let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+              for (const pt of ring) {
+                const [px, py] = toXY(pt[0], pt[1]);
+                if (px < mnx) mnx = px;
+                if (px > mxx) mxx = px;
+                if (py < mny) mny = py;
+                if (py > mxy) mxy = py;
+              }
+              const area = (mxx - mnx) * (mxy - mny);
+              if (area > bestArea) {
+                bestArea = area;
+                cx = (mnx + mxx) / 2;
+                cy = (mny + mxy) / 2;
+              }
+            }
+            return `M${ring.map(toSvg).join('L')}Z`;
+          }),
+        )
         .join('');
-      return { code: f.properties.code, name: f.properties.name, d };
+      return { code: f.properties.code, name: f.properties.name, d, cx, cy };
     });
     return { paths, viewH, toXY };
   }, [geo]);
+}
+
+/** 시·도 경계(17개) — 굵은 선 한 겹으로 '지도' 인상을 만든다 */
+function useSidoPaths(toXY: ((lng: number, lat: number) => [number, number]) | undefined) {
+  const { data: geo } = useQuery({
+    queryKey: ['sido-geo'],
+    queryFn: async (): Promise<SigunguGeo> => {
+      const res = await fetch('/geo/sido.json');
+      if (!res.ok) throw new Error(`시도 경계 로드 실패: ${res.status}`);
+      return res.json();
+    },
+    staleTime: Infinity,
+  });
+  return useMemo(() => {
+    if (!geo || !toXY) return [];
+    const toSvg = (pt: [number, number]) => {
+      const [x, y] = toXY(pt[0], pt[1]);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    };
+    return geo.features.map((f) => {
+      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      return polys.flatMap((poly) => poly.map((ring) => `M${ring.map(toSvg).join('L')}Z`)).join('');
+    });
+  }, [geo, toXY]);
 }
 
 /** 방문 횟수 → 덧칠 단계 (1회 연함 → 5회+ 꽉 채움, 명세 §3.1 재방문 처리) */
@@ -222,9 +272,12 @@ export default function ConquestMap({
     staleTime: Infinity,
   });
   const projected = useProjectedPaths(geo);
+  const sidoPaths = useSidoPaths(projected?.toXY);
   const { svgRef, viewBoxAttr, scaleFactor, zoomed, zoomCenter, reset, handlers } = useZoomPan(
     projected?.viewH ?? VIEW_W,
   );
+  // 시군구 이름은 2.6배부터 (더 확대하면 스팟 라벨과 함께 보인다)
+  const showRegionNames = scaleFactor <= 1 / 2.6;
 
   if (!projected) {
     return (
@@ -239,8 +292,8 @@ export default function ConquestMap({
       <svg
         ref={svgRef}
         viewBox={viewBoxAttr}
-        className="w-full select-none rounded-2xl rounded-tr-md border-2 border-ink/10 bg-white/40"
-        style={{ touchAction: zoomed ? 'none' : 'pan-y' }}
+        className="w-full select-none rounded-2xl rounded-tr-md border-2 border-ink/10"
+        style={{ touchAction: zoomed ? 'none' : 'pan-y', backgroundColor: SEA_COLOR }}
         role="img"
         aria-label="대한민국 시군구 정복 지도 (핀치로 확대·축소)"
         {...handlers}
@@ -279,6 +332,43 @@ export default function ConquestMap({
             );
           })}
         </g>
+        {/* 시·도 경계 — 굵은 한 겹으로 지도 인상 강화 */}
+        <g>
+          {sidoPaths.map((d, i) => (
+            <path
+              key={i}
+              d={d}
+              fill="none"
+              stroke="#3b3733"
+              strokeOpacity="0.45"
+              strokeWidth="1.6"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
+        </g>
+        {/* 확대하면 시군구 이름 — 카카오맵처럼 지역명이 읽히게 */}
+        {showRegionNames && (
+          <g pointerEvents="none">
+            {projected.paths.map((p) => (
+              <text
+                key={`label-${p.code}`}
+                x={p.cx}
+                y={p.cy}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize={13 * scaleFactor}
+                fontWeight={600}
+                fill="#3b3733"
+                opacity={0.55}
+                stroke={paper}
+                strokeWidth={3 * scaleFactor}
+                paintOrder="stroke"
+              >
+                {p.name}
+              </text>
+            ))}
+          </g>
+        )}
         <SpotOverlay toXY={projected.toXY} onSelectRecord={onSelectRecord} scaleFactor={scaleFactor} pin={pin} />
       </svg>
 
@@ -316,12 +406,21 @@ export default function ConquestMap({
 }
 
 /** 기록 스팟 점 + 같은 기록 스팟의 점선 연결 (명세 §3.1 데이트 기록 핀) — 점 탭 시 기록 상세 */
-/** 핀 모양 렌더 (도화지 꾸미기 A안) — 화면상 크기가 일정하도록 좌표를 직접 계산 */
+/** 핀 모양 렌더 (도화지 꾸미기 A안) — 그림자·흰 테두리·하이라이트로 입체감, 화면상 크기 일정 */
 function PinShape({ style, x, y, r, color, sf }: { style: string; x: number; y: number; r: number; color: string; sf: number }) {
   const stroke = { stroke: '#fdfcf7', strokeWidth: 2 * sf, strokeLinejoin: 'round' as const };
+  const shadow = (cy: number) => (
+    <ellipse cx={x} cy={cy} rx={r * 1.15} ry={r * 0.38} fill="#3b3733" opacity={0.16} />
+  );
   if (style === 'heart') {
     const d = `M ${x} ${y + r * 1.25} C ${x - r * 2.1} ${y - r * 0.7}, ${x - r * 0.7} ${y - r * 1.7}, ${x} ${y - r * 0.4} C ${x + r * 0.7} ${y - r * 1.7}, ${x + r * 2.1} ${y - r * 0.7}, ${x} ${y + r * 1.25} Z`;
-    return <path d={d} fill={color} {...stroke} />;
+    return (
+      <>
+        {shadow(y + r * 1.55)}
+        <path d={d} fill={color} {...stroke} />
+        <circle cx={x - r * 0.8} cy={y - r * 0.75} r={r * 0.34} fill="#fdfcf7" opacity={0.85} />
+      </>
+    );
   }
   if (style === 'star') {
     const pts: string[] = [];
@@ -330,24 +429,36 @@ function PinShape({ style, x, y, r, color, sf }: { style: string; x: number; y: 
       const rad = i % 2 === 0 ? r * 1.55 : r * 0.7;
       pts.push(`${x + Math.cos(angle) * rad},${y + Math.sin(angle) * rad}`);
     }
-    return <polygon points={pts.join(' ')} fill={color} {...stroke} />;
+    return (
+      <>
+        {shadow(y + r * 1.8)}
+        <polygon points={pts.join(' ')} fill={color} {...stroke} />
+        <circle cx={x - r * 0.35} cy={y - r * 0.45} r={r * 0.3} fill="#fdfcf7" opacity={0.85} />
+      </>
+    );
   }
   if (style === 'tape') {
     return (
-      <rect
-        x={x - r * 1.7}
-        y={y - r * 0.95}
-        width={r * 3.4}
-        height={r * 1.9}
-        rx={r * 0.25}
-        transform={`rotate(-8 ${x} ${y})`}
-        fill={color}
-        opacity={0.92}
-        {...stroke}
-      />
+      <>
+        {shadow(y + r * 1.35)}
+        <g transform={`rotate(-8 ${x} ${y})`}>
+          <rect x={x - r * 1.7} y={y - r * 0.95} width={r * 3.4} height={r * 1.9} rx={r * 0.25} fill={color} opacity={0.92} {...stroke} />
+          {/* 마스킹테이프 질감 줄 */}
+          <line x1={x - r * 1.2} y1={y - r * 0.32} x2={x + r * 1.2} y2={y - r * 0.32} stroke="#fdfcf7" strokeWidth={0.9 * sf} opacity={0.5} />
+          <line x1={x - r * 1.2} y1={y + r * 0.32} x2={x + r * 1.2} y2={y + r * 0.32} stroke="#fdfcf7" strokeWidth={0.9 * sf} opacity={0.5} />
+        </g>
+      </>
     );
   }
-  return <circle cx={x} cy={y} r={r} fill={color} stroke="#fdfcf7" strokeWidth={2.5 * sf} />;
+  // 기본 '콕 핀': 물방울 지도핀 — 꼭짓점이 정확한 위치를 가리킨다
+  const d = `M ${x} ${y} C ${x - r * 1.5} ${y - r * 1.3} ${x - r * 1.4} ${y - r * 3.1} ${x} ${y - r * 3.1} C ${x + r * 1.4} ${y - r * 3.1} ${x + r * 1.5} ${y - r * 1.3} ${x} ${y} Z`;
+  return (
+    <>
+      <ellipse cx={x} cy={y + r * 0.35} rx={r * 0.9} ry={r * 0.32} fill="#3b3733" opacity={0.16} />
+      <path d={d} fill={color} {...stroke} />
+      <circle cx={x} cy={y - r * 1.95} r={r * 0.55} fill="#fdfcf7" />
+    </>
+  );
 }
 
 function SpotOverlay({
@@ -409,11 +520,11 @@ function SpotOverlay({
                     y={p.xy[1] + 16 * scaleFactor}
                     textAnchor="middle"
                     dominantBaseline="hanging"
-                    fontSize={11 * scaleFactor}
-                    fontWeight={600}
+                    fontSize={15 * scaleFactor}
+                    fontWeight={700}
                     fill="#3b3733"
                     stroke="#fdfcf7"
-                    strokeWidth={3 * scaleFactor}
+                    strokeWidth={3.5 * scaleFactor}
                     paintOrder="stroke"
                   >
                     {p.s.name}

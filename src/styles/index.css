@@ -21,3 +21,17 @@ select,
 textarea {
   font-size: max(16px, 1rem);
 }
+
+/* iOS 날짜 입력창이 고유 최소 너비로 컨테이너를 넘는 문제 — 시스템 외형을 끄고 폭을 강제 */
+input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+}
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
+select {
+  max-width: 100%;
+}

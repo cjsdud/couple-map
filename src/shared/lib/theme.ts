@@ -17,8 +17,11 @@ export interface ThemeOption {
   unlock: number;
 }
 
+/** 베타 기간엔 전부 해금 (사용자 결정 2026-07-21) — 정식 오픈 때 false로 돌려 해금 루프 가동 */
+export const BETA_ALL_UNLOCKED = true;
+
 export const PIN_STYLES: ThemeOption[] = [
-  { key: 'dot', label: '동그라미', unlock: 0 },
+  { key: 'dot', label: '콕 핀', unlock: 0 },
   { key: 'heart', label: '하트', unlock: 0 },
   { key: 'star', label: '별', unlock: 7 },
   { key: 'tape', label: '테이프', unlock: 14 },
@@ -42,8 +45,9 @@ export function pinStyle(theme: CoupleTheme | null | undefined): string {
   return theme?.pin ?? DEFAULT_THEME.pin;
 }
 
-/** 해금 여부: 현재 또는 역대 최고 스트릭이 기준 이상이면 영구 해금 */
+/** 해금 여부: 현재 또는 역대 최고 스트릭이 기준 이상이면 영구 해금 (베타 기간엔 전부 열림) */
 export function isUnlocked(option: ThemeOption, theme: CoupleTheme | null | undefined, currentStreak: number): boolean {
+  if (BETA_ALL_UNLOCKED) return true;
   const best = Math.max(theme?.maxStreak ?? 0, currentStreak);
   return best >= option.unlock;
 }
