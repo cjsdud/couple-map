@@ -128,6 +128,52 @@ function paintBase(ctx: CanvasRenderingContext2D) {
   ctx.globalAlpha = 1;
 }
 
+/** 사진이 없을 때 가운데를 채우는 크레용 하트 낙서 */
+function heartDoodle(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string) {
+  const s = size / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-0.06);
+  ctx.beginPath();
+  ctx.moveTo(0, s * 0.9);
+  ctx.bezierCurveTo(-s * 1.4, s * 0.05, -s * 0.7, -s, 0, -s * 0.35);
+  ctx.bezierCurveTo(s * 0.7, -s, s * 1.4, s * 0.05, 0, s * 0.9);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.15;
+  ctx.fill();
+  ctx.globalAlpha = 0.8;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 6;
+  ctx.setLineDash([26, 14]);
+  ctx.stroke();
+  ctx.restore();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+}
+
+/** 좌하단 정복 지역 칩 — 3개까지 + "외 N곳", 워터마크 영역은 침범하지 않는다 */
+function paintRegionChips(ctx: CanvasRenderingContext2D, names: string[]) {
+  if (names.length === 0) return;
+  ctx.textAlign = 'left';
+  const shown = names.slice(0, 3);
+  const labels = names.length > shown.length ? [...shown, `외 ${names.length - shown.length}곳`] : shown;
+  let chipX = 64;
+  ctx.font = `700 30px ${FONT}`;
+  for (const label of labels) {
+    const w = ctx.measureText(label).width + 48;
+    if (chipX + w > CARD_W - 320) break;
+    ctx.fillStyle = GREEN;
+    ctx.globalAlpha = 0.9;
+    roundRect(ctx, chipX, CARD_H - 100, w, 52, 26);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(label, chipX + 24, CARD_H - 64);
+    chipX += w + 14;
+  }
+}
+
 function paintWatermark(ctx: CanvasRenderingContext2D) {
   ctx.font = `600 30px ${FONT}`;
   ctx.fillStyle = INK;
@@ -212,21 +258,7 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
     ctx.globalAlpha = 1;
   }
 
-  // 정복 지역 칩
-  ctx.textAlign = 'left';
-  let chipX = 64;
-  for (const name of data.regionNames.slice(0, 3)) {
-    ctx.font = `700 30px ${FONT}`;
-    const w = ctx.measureText(name).width + 48;
-    ctx.fillStyle = GREEN;
-    ctx.globalAlpha = 0.9;
-    roundRect(ctx, chipX, CARD_H - 100, w, 52, 26);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(name, chipX + 24, CARD_H - 64);
-    chipX += w + 14;
-  }
+  paintRegionChips(ctx, data.regionNames);
   paintWatermark(ctx);
 }
 
@@ -322,6 +354,70 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
   }
 
   paintPhotoGrid(ctx, images, Math.max(bubbleY + 20, 780), 420);
+  paintWatermark(ctx);
+}
+
+export interface RecapCardData {
+  /** 예: "2026년 7월의 우리" / "지금까지의 우리" */
+  title: string;
+  /** 큰 숫자 통계 2~3칸 (예: value "12번" label "데이트") */
+  stats: { value: string; label: string }[];
+  regionNames: string[];
+  photoUrls: string[];
+  /** 하단 한 줄 (예: "대한민국 8/230 지역에 우리 발자국") */
+  footer: string | null;
+}
+
+/** 종합 카드 — 여러 기록을 한 장으로 (월간 리캡·전체 리캡 공용). 지출은 여기도 제외 */
+export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardData) {
+  canvas.width = CARD_W;
+  canvas.height = CARD_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvas 미지원');
+  const images = await Promise.all(data.photoUrls.slice(0, 4).map(loadImage));
+
+  paintBase(ctx);
+  tape(ctx, CARD_W / 2, 96, 300, 74, -2.5, GREEN);
+
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'center';
+  ctx.font = `700 58px ${FONT}`;
+  ctx.fillText(data.title, CARD_W / 2, 220);
+
+  const hasPhotos = images.some((i) => i !== null);
+
+  // 통계 칸 — 사진이 없으면 통계가 주인공이라 더 크게, 아래로
+  const stats = data.stats.slice(0, 3);
+  const statsTop = hasPhotos ? 300 : 420;
+  const colW = (CARD_W - 160) / stats.length;
+  for (const [i, s] of stats.entries()) {
+    const x = 80 + colW * i + colW / 2;
+    ctx.font = `700 ${hasPhotos ? 72 : 84}px ${FONT}`;
+    ctx.fillStyle = PINK;
+    ctx.fillText(s.value, x, statsTop + 72);
+    ctx.font = `600 30px ${FONT}`;
+    ctx.fillStyle = INK;
+    ctx.globalAlpha = 0.6;
+    ctx.fillText(s.label, x, statsTop + 128);
+    ctx.globalAlpha = 1;
+  }
+
+  if (hasPhotos) {
+    paintPhotoGrid(ctx, images, 490, 560);
+  } else {
+    heartDoodle(ctx, CARD_W / 2, 830, 300, PINK);
+  }
+
+  if (data.footer) {
+    ctx.font = `500 36px ${FONT}`;
+    ctx.fillStyle = INK;
+    ctx.globalAlpha = 0.7;
+    ctx.textAlign = 'center';
+    ctx.fillText(data.footer, CARD_W / 2, 1130);
+    ctx.globalAlpha = 1;
+  }
+
+  paintRegionChips(ctx, data.regionNames);
   paintWatermark(ctx);
 }
 

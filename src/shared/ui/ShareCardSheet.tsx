@@ -24,7 +24,8 @@ export default function ShareCardSheet({ open, onClose, paint, fileName }: Props
   );
 }
 
-function CardPreview({ paint, fileName }: { paint: Props['paint']; fileName: string }) {
+/** 미리보기 + 공유/저장 본체 — 다른 시트(종합 카드 등)에서도 재사용. key로 다시 그리기 제어 */
+export function CardPreview({ paint, fileName }: { paint: Props['paint']; fileName: string }) {
   // 마운트 시점의 페인터로 1회만 그린다 — 부모 리렌더로 인한 다시 그리기 방지
   const paintRef = useRef(paint);
   const blobRef = useRef<Blob | null>(null);

@@ -4,6 +4,7 @@ import { KAKAO_JS_KEY } from '../../shared/lib/kakaoMap';
 import { useCoupleState } from '../couple/useCoupleState';
 import ConquestMap from './ConquestMap';
 import KakaoBaseMap from './KakaoBaseMap';
+import RecapCardSheet from './RecapCardSheet';
 import RecordDetailSheet from './RecordDetailSheet';
 import RecordSheet from './RecordSheet';
 import Timeline from './Timeline';
@@ -46,6 +47,8 @@ export default function MapScreen() {
     }
   };
   const [sheetOpen, setSheetOpen] = useState(false);
+  // 여러 기록을 한 장으로 — 종합 카드 시트 (타임라인 뷰에서 진입)
+  const [recapOpen, setRecapOpen] = useState(false);
   // 지도 핀·타임라인 카드 공용 상세 시트 — 선택된 기록 id
   const [detailId, setDetailId] = useState<string | null>(null);
   // 수정 플로우: 상세 시트의 '고치기' → 상세를 닫고 작성 시트를 수정 모드로 연다
@@ -124,19 +127,28 @@ export default function MapScreen() {
         </>
       ) : (
         <>
-          <div className="flex gap-1.5">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => setFilter(f.key)}
-                className={`rounded-full px-3 py-1.5 text-xs ${
-                  filter === f.key ? 'bg-green font-bold text-white' : 'border border-ink/15 bg-white/60'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-1.5">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setFilter(f.key)}
+                  className={`rounded-full px-3 py-1.5 text-xs ${
+                    filter === f.key ? 'bg-green font-bold text-white' : 'border border-ink/15 bg-white/60'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setRecapOpen(true)}
+              className="whitespace-nowrap rounded-full border border-ink/15 bg-white/60 px-3 py-1.5 text-xs font-semibold"
+            >
+              📤 종합 카드
+            </button>
           </div>
           <Timeline filter={filter} onSelectRecord={setDetailId} />
         </>
@@ -159,6 +171,7 @@ export default function MapScreen() {
         coupleId={coupleId}
         editRecord={editRecord ?? undefined}
       />
+      <RecapCardSheet open={recapOpen} onClose={() => setRecapOpen(false)} coupleId={coupleId} />
       <RecordDetailSheet
         recordId={detailId}
         onClose={() => setDetailId(null)}
