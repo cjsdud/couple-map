@@ -58,6 +58,7 @@ function useProjectedPaths(geo: SigunguGeo | undefined) {
       let bestArea = -1;
       let cx = 0;
       let cy = 0;
+      let lw = 0; // 본체 bbox 폭 — 글자가 지역을 삐져나가는지 판정용
       const d = polys
         .flatMap((poly) =>
           poly.map((ring, ringIdx) => {
@@ -75,67 +76,17 @@ function useProjectedPaths(geo: SigunguGeo | undefined) {
                 bestArea = area;
                 cx = (mnx + mxx) / 2;
                 cy = (mny + mxy) / 2;
+                lw = mxx - mnx;
               }
             }
             return `M${ring.map(toSvg).join('L')}Z`;
           }),
         )
         .join('');
-      return { code: f.properties.code, name: f.properties.name, d, cx, cy };
+      return { code: f.properties.code, name: f.properties.name, d, cx, cy, lw };
     });
     return { paths, viewH, toXY };
   }, [geo]);
-}
-
-/** 행정동(3,558개) — 깊은 확대에서만 지연 로드해 시 내부를 세분화 */
-function useDongFeatures(toXY: ((lng: number, lat: number) => [number, number]) | undefined, enabled: boolean) {
-  const { data: geo } = useQuery({
-    queryKey: ['dong-geo'],
-    queryFn: async (): Promise<{ features: { properties: { name: string }; geometry: SigunguFeature['geometry'] }[] }> => {
-      const res = await fetch('/geo/dong.json');
-      if (!res.ok) throw new Error(`행정동 경계 로드 실패: ${res.status}`);
-      return res.json();
-    },
-    staleTime: Infinity,
-    enabled,
-  });
-  return useMemo(() => {
-    if (!geo || !toXY) return null;
-    const toSvg = (pt: [number, number]) => {
-      const [x, y] = toXY(pt[0], pt[1]);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    };
-    return geo.features.map((f) => {
-      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
-      let bestArea = -1;
-      let cx = 0;
-      let cy = 0;
-      const d = polys
-        .flatMap((poly) =>
-          poly.map((ring, ringIdx) => {
-            if (ringIdx === 0) {
-              let mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
-              for (const pt of ring) {
-                const [px, py] = toXY(pt[0], pt[1]);
-                if (px < mnx) mnx = px;
-                if (px > mxx) mxx = px;
-                if (py < mny) mny = py;
-                if (py > mxy) mxy = py;
-              }
-              const area = (mxx - mnx) * (mxy - mny);
-              if (area > bestArea) {
-                bestArea = area;
-                cx = (mnx + mxx) / 2;
-                cy = (mny + mxy) / 2;
-              }
-            }
-            return `M${ring.map(toSvg).join('L')}Z`;
-          }),
-        )
-        .join('');
-      return { name: f.properties.name, d, cx, cy };
-    });
-  }, [geo, toXY]);
 }
 
 /** 시·도 경계(17개) — 굵은 선 한 겹으로 '지도' 인상을 만든다 */
@@ -330,11 +281,8 @@ export default function ConquestMap({
   const { svgRef, vb, viewBoxAttr, scaleFactor, zoomed, zoomCenter, reset, handlers } = useZoomPan(
     projected?.viewH ?? VIEW_W,
   );
-  // 시군구 이름은 2.6배부터, 동 경계는 4배부터(지연 로드).
-  // 동 '이름'은 표시하지 않는다 — 깊게 확대해도 큰 도시(시군구) 단위 글자만 (사용자 요청 2026-07-23).
+  // 시군구 이름은 2.6배부터 — 행정동 세분화는 어지럽다는 사용자 피드백(2026-07-23)으로 제거
   const showRegionNames = scaleFactor <= 1 / 2.6;
-  const showDong = scaleFactor <= 1 / 4;
-  const dongFeatures = useDongFeatures(projected?.toXY, showDong);
   // 라벨은 현재 화면 안의 지역만 — 경계 밖에 걸친 글자 방지
   const viewH = projected?.viewH ?? VIEW_W;
   const vbH = vb.w * (viewH / VIEW_W);
@@ -390,22 +338,6 @@ export default function ConquestMap({
             );
           })}
         </g>
-        {/* 행정동 경계 — 깊은 확대에서 시 안을 세분화 (실선보다 옅은 헤어라인) */}
-        {showDong && dongFeatures && (
-          <g pointerEvents="none">
-            {dongFeatures.map((f, i) => (
-              <path
-                key={i}
-                d={f.d}
-                fill="none"
-                stroke="#3b3733"
-                strokeOpacity="0.13"
-                strokeWidth="0.8"
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-          </g>
-        )}
         {/* 시·도 경계 — 한 겹으로 지도 인상 강화 */}
         <g>
           {sidoPaths.map((d, i) => (
@@ -420,11 +352,11 @@ export default function ConquestMap({
             />
           ))}
         </g>
-        {/* 확대하면 시군구 이름 — 화면 안의 지역만 (경계 밖 글자 방지) */}
+        {/* 확대하면 시군구 이름 — 화면 안 + 글자가 지역 폭 안에 들어가는 곳만 (삐져나감 방지) */}
         {showRegionNames && (
           <g pointerEvents="none">
             {projected.paths
-              .filter((p) => inView(p.cx, p.cy))
+              .filter((p) => inView(p.cx, p.cy) && p.name.length * 26 * scaleFactor * 0.95 <= p.lw)
               .map((p) => (
                 <text
                   key={`label-${p.code}`}
