@@ -20,6 +20,8 @@ const VIEW_W = 800;
 const MAX_ZOOM = 16;
 /** 바다 — 수채화 톤 (도화지 감성 유지하면서 육지/바다 대비로 지도답게) */
 const SEA_COLOR = '#e2edf3';
+/** 정복 색칠 — 크레용 초록 (빗금 대신 솔리드로 곱게 채운다) */
+const CONQUEST_FILL = '#8cab68';
 
 /** 위도 36° 기준 등장방형 근사 — 정복 개요 지도용으로 충분, SDK 불필요 (tech-design §3) */
 function useProjectedPaths(geo: SigunguGeo | undefined) {
@@ -328,10 +330,10 @@ export default function ConquestMap({
   const { svgRef, vb, viewBoxAttr, scaleFactor, zoomed, zoomCenter, reset, handlers } = useZoomPan(
     projected?.viewH ?? VIEW_W,
   );
-  // 시군구 이름은 2.6배부터, 동 경계는 4배부터(지연 로드), 동 이름은 6.5배부터
+  // 시군구 이름은 2.6배부터, 동 경계는 4배부터(지연 로드).
+  // 동 '이름'은 표시하지 않는다 — 깊게 확대해도 큰 도시(시군구) 단위 글자만 (사용자 요청 2026-07-23).
   const showRegionNames = scaleFactor <= 1 / 2.6;
   const showDong = scaleFactor <= 1 / 4;
-  const showDongNames = scaleFactor <= 1 / 6.5;
   const dongFeatures = useDongFeatures(projected?.toXY, showDong);
   // 라벨은 현재 화면 안의 지역만 — 경계 밖에 걸친 글자 방지
   const viewH = projected?.viewH ?? VIEW_W;
@@ -359,10 +361,6 @@ export default function ConquestMap({
         {...handlers}
       >
         <defs>
-          {/* 크레용 빗금 — 덧칠(방문 횟수)은 opacity 단계로 표현 */}
-          <pattern id="crayon" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="7" stroke="#8cab68" strokeWidth="3.5" strokeLinecap="round" />
-          </pattern>
           {/* 손그림 wobble */}
           <filter id="wobble">
             <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" result="noise" />
@@ -384,7 +382,7 @@ export default function ConquestMap({
                   vectorEffect="non-scaling-stroke"
                 />
                 {tier > 0 && (
-                  <path d={p.d} fill="url(#crayon)" opacity={TIER_OPACITY[tier]}>
+                  <path d={p.d} fill={CONQUEST_FILL} opacity={TIER_OPACITY[tier]}>
                     <title>{`${p.name} ×${visitCounts[p.code]}`}</title>
                   </path>
                 )}
@@ -434,40 +432,15 @@ export default function ConquestMap({
                   y={p.cy}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fontSize={12 * scaleFactor}
-                  fontWeight={600}
+                  fontSize={26 * scaleFactor}
+                  fontWeight={700}
                   fill="#3b3733"
-                  opacity={0.55}
+                  opacity={0.72}
                   stroke={paper}
-                  strokeWidth={3 * scaleFactor}
+                  strokeWidth={5 * scaleFactor}
                   paintOrder="stroke"
                 >
                   {p.name}
-                </text>
-              ))}
-          </g>
-        )}
-        {/* 동 이름 — 아주 깊은 확대에서만, 화면 안만 */}
-        {showDongNames && dongFeatures && (
-          <g pointerEvents="none">
-            {dongFeatures
-              .filter((f) => inView(f.cx, f.cy))
-              .map((f, i) => (
-                <text
-                  key={`dong-${i}`}
-                  x={f.cx}
-                  y={f.cy}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={10 * scaleFactor}
-                  fontWeight={500}
-                  fill="#3b3733"
-                  opacity={0.38}
-                  stroke={paper}
-                  strokeWidth={2.5 * scaleFactor}
-                  paintOrder="stroke"
-                >
-                  {f.name}
                 </text>
               ))}
           </g>
@@ -578,8 +551,9 @@ function SpotOverlay({
   pin: string;
 }) {
   const { data: records = [] } = useRecords();
-  const r = 6 * scaleFactor;
-  const hitR = 14 * scaleFactor;
+  // 핀을 크게 — 화면상 크기는 scaleFactor 보정으로 확대해도 일정 (사용자 요청 2026-07-23)
+  const r = 15 * scaleFactor;
+  const hitR = 24 * scaleFactor;
   // 2.2배 이상 확대하면 점 아래에 장소 이름 라벨 (사용자 요청 2026-07-21)
   const showLabels = scaleFactor <= 1 / 2.2;
   return (

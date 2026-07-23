@@ -31,7 +31,13 @@ function Viewer({ url, onClose }: { url: string; onClose: () => void }) {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // 뷰어 열린 동안 배경 스크롤 잠금 — 뒤 화면이 딸려 움직이지 않게
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [onClose]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
