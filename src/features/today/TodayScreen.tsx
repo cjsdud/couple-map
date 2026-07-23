@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
 import { calcStreak, monthGrid } from '../../shared/lib/daily';
 import { coordToRegion } from '../../shared/lib/kakao';
+import { paintDayCard } from '../../shared/lib/shareCard';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
+import ShareCardSheet from '../../shared/ui/ShareCardSheet';
 import RecordSheet from '../map/RecordSheet';
 import type { PhotoDraft, SpotDraft } from '../map/useRecords';
 import {
@@ -662,6 +664,7 @@ function DayDetailSheet({
   const [y, m, d] = date.split('-').map(Number);
   const photoUrls = photos.filter((p) => p.signedUrl);
   const empty = !isLoading && !myEntry && !partnerEntry && photos.length === 0;
+  const [shareOpen, setShareOpen] = useState(false);
 
   return (
     <BottomSheet open onClose={onClose} title={`${y}년 ${m}월 ${d}일`}>
@@ -751,6 +754,34 @@ function DayDetailSheet({
             )}
             <p className="mt-2 text-xs opacity-50">사진은 잔디와 상관없이 자유롭게 올릴 수 있어요</p>
           </section>
+
+          {/* 공유 카드 — 그날의 기분·일기·답·사진을 인스타 규격으로 (잠긴 짝꿍 답·사진은 애초에 안 온다) */}
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="w-full rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/70 py-3 text-sm font-bold active:translate-y-px"
+          >
+            📤 공유 카드 만들기
+          </button>
+
+          <ShareCardSheet
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            fileName={`dohwaji-${date}.png`}
+            paint={(canvas) =>
+              paintDayCard(canvas, {
+                date,
+                myMood: myEntry?.mood ?? null,
+                partnerMood: partnerEntry?.mood ?? null,
+                myNote: myEntry?.note ?? null,
+                partnerNote: partnerEntry?.note ?? null,
+                question: question.data?.text ?? null,
+                myAnswer: myEntry?.answer ?? null,
+                partnerAnswer: partnerEntry?.answer ?? null,
+                photoUrls: photoUrls.map((p) => p.signedUrl as string),
+              })
+            }
+          />
         </div>
       )}
     </BottomSheet>

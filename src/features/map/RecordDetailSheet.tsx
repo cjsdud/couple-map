@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { paintRecordCard } from '../../shared/lib/shareCard';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
+import ShareCardSheet from '../../shared/ui/ShareCardSheet';
+import { useSigunguNames } from './useSigunguNames';
 import {
   categoryLabel,
   useCoupleMembers,
@@ -114,10 +117,14 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
   const markVisited = useMarkVisited();
   const deletePhoto = useDeleteRecordPhoto();
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  // 공유 카드 지역 칩용 코드→이름 — 상세가 열려 있을 때만 GeoJSON을 가져온다
+  const sigunguNames = useSigunguNames(record !== null).data ?? {};
 
   const close = () => {
     markVisited.reset();
     deletePhoto.reset();
+    setShareOpen(false);
     onClose();
   };
 
@@ -216,8 +223,44 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
             </div>
           )}
 
+          {/* 공유 카드 — 다녀온 기록만 (소장·인스타용, 지출은 카드에서 자동 제외) */}
+          {record.status === 'visited' && (
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              className="w-full rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/70 py-3 text-sm font-bold active:translate-y-px"
+            >
+              📤 공유 카드 만들기
+            </button>
+          )}
+
           {/* 수정·지우기 — 기록이 바뀌면(key) 확인 상태도 초기화 */}
           <EditEraseActions key={record.id} record={record} onEdit={onEdit} onDeleted={close} />
+
+          <ShareCardSheet
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            fileName={`dohwaji-${record.date}.png`}
+            paint={(canvas) =>
+              paintRecordCard(canvas, {
+                date: record.date,
+                spotNames: spots.map((s) => s.name),
+                memo: record.memo,
+                regionNames: [
+                  ...new Set(
+                    spots
+                      .map((s) => s.sigungu_code)
+                      .filter((c): c is string => c !== null)
+                      .map((c) => sigunguNames[c])
+                      .filter((n): n is string => Boolean(n)),
+                  ),
+                ],
+                photoUrls: photos
+                  .map((p) => p.signedUrl)
+                  .filter((u): u is string => Boolean(u)),
+              })
+            }
+          />
         </div>
       )}
       <PhotoViewer url={viewerUrl} onClose={() => setViewerUrl(null)} />
