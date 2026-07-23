@@ -73,13 +73,8 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const thisMonth = now.getMonth() + 1;
   const [scope, setScope] = useState<Scope>('month');
   const [theme, setTheme] = useState<ShareTheme>('paper');
-  const [caption, setCaption] = useState('');
-  // 입력이 멈춘 뒤에만 반영 (매 타건 재렌더 방지)
-  const [appliedCaption, setAppliedCaption] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => setAppliedCaption(caption), 450);
-    return () => clearTimeout(t);
-  }, [caption]);
+  // 문구 초안: 건드리기 전(null)엔 그 범위의 최근 기록 메모를 프리필 (사용자 요청 2026-07-23)
+  const [captionDraft, setCaptionDraft] = useState<string | null>(null);
   const [view, setView] = useState({ year: thisYear, month: thisMonth });
   const isCurrentMonth = view.year === thisYear && view.month === thisMonth;
 
@@ -88,6 +83,16 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const monthKey = `${view.year}-${String(view.month).padStart(2, '0')}`;
   const monthRecords = visited.filter((r) => r.date.startsWith(monthKey));
   const target = scope === 'month' ? monthRecords : visited;
+
+  // 이전에 남긴 메모 중 최신 것을 문구로 프리필 — 입력하면 입력값이 우선
+  const latestMemo = target.find((r) => r.memo)?.memo ?? '';
+  const caption = captionDraft ?? latestMemo;
+  // 입력이 멈춘 뒤에만 카드에 반영 (매 타건 재렌더 방지)
+  const [appliedCaption, setAppliedCaption] = useState(caption);
+  useEffect(() => {
+    const t = setTimeout(() => setAppliedCaption(caption), 450);
+    return () => clearTimeout(t);
+  }, [caption]);
 
   const namesQuery = useSigunguNames(open);
   const sigunguNames = namesQuery.data ?? {};
@@ -212,7 +217,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
         {!empty && (
           <>
             <ThemePicker theme={theme} onPick={setTheme} />
-            <CaptionField value={caption} onChange={setCaption} placeholder="한마디 남기기 (선택)" />
+            <CaptionField value={caption} onChange={setCaptionDraft} placeholder="한마디 남기기 (선택)" />
           </>
         )}
 
