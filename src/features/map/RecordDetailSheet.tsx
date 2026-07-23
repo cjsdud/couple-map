@@ -8,7 +8,6 @@ import {
   categoryLabel,
   useCoupleMembers,
   useDeleteRecord,
-  useDeleteRecordPhoto,
   useMarkVisited,
   useRecordPhotos,
   useRecords,
@@ -17,19 +16,15 @@ import {
   type SpotRow,
 } from './useRecords';
 
-/** 스팟 태그별 사진 그룹핑 (plan-multi-region B안) — 태그가 하나도 없으면 헤더 없이 평평하게 */
+/** 스팟 태그별 사진 그룹핑 (plan-multi-region B안) — 태그가 하나도 없으면 헤더 없이 평평하게.
+ *  상세에서는 보기 전용 — 사진 지우기는 '수정하기'를 눌러 작성 시트에서만 (사용자 요청 2026-07-23). */
 function PhotoGroups({
   photos,
   spots,
-  onDelete,
-  deleting,
   onView,
 }: {
   photos: RecordPhoto[];
   spots: SpotRow[];
-  /** 사진 한 장 지우기 (기존 사진 관리는 여기서 — 작성 시트는 새 사진 추가만) */
-  onDelete: (photo: RecordPhoto) => void;
-  deleting: boolean;
   /** 사진 탭 → 크게 보기 */
   onView: (url: string) => void;
 }) {
@@ -38,30 +33,20 @@ function PhotoGroups({
       {list.map(
         (p) =>
           p.signedUrl && (
-            <div key={p.id} className="relative">
-              <button
-                type="button"
-                aria-label="사진 크게 보기"
-                onClick={() => onView(p.signedUrl as string)}
-                className="block w-full"
-              >
-                <img
-                  src={p.signedUrl}
-                  alt="데이트 사진"
-                  loading="lazy"
-                  className="aspect-square w-full rounded-xl rounded-tl-sm border border-ink/10 object-cover"
-                />
-              </button>
-              <button
-                type="button"
-                aria-label="이 사진 지우기"
-                onClick={() => onDelete(p)}
-                disabled={deleting}
-                className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-paper/85 text-sm text-ink shadow-sm active:translate-y-px disabled:opacity-40"
-              >
-                ✕
-              </button>
-            </div>
+            <button
+              key={p.id}
+              type="button"
+              aria-label="사진 크게 보기"
+              onClick={() => onView(p.signedUrl as string)}
+              className="block w-full"
+            >
+              <img
+                src={p.signedUrl}
+                alt="데이트 사진"
+                loading="lazy"
+                className="aspect-square w-full rounded-xl rounded-tl-sm border border-ink/10 object-cover"
+              />
+            </button>
           ),
       )}
     </div>
@@ -115,7 +100,6 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
   const photos = useRecordPhotos(record?.id).data ?? [];
   const members = useCoupleMembers();
   const markVisited = useMarkVisited();
-  const deletePhoto = useDeleteRecordPhoto();
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   // 공유 카드 지역 칩용 코드→이름 — 상세가 열려 있을 때만 GeoJSON을 가져온다
@@ -123,7 +107,6 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
 
   const close = () => {
     markVisited.reset();
-    deletePhoto.reset();
     setShareOpen(false);
     onClose();
   };
@@ -163,22 +146,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
           {record.memo && <p className="break-words text-sm leading-relaxed opacity-70">{record.memo}</p>}
 
           {photos.length > 0 && (
-            <div className="space-y-1.5">
-              <PhotoGroups
-                photos={photos}
-                spots={spots}
-                deleting={deletePhoto.isPending}
-                onDelete={(p) =>
-                  deletePhoto.mutate({ id: p.id, recordId: record.id, storagePath: p.storage_path })
-                }
-                onView={setViewerUrl}
-              />
-              {deletePhoto.isError && (
-                <p className="text-sm text-pink">
-                  사진을 지우다가 문제가 생겼어요. 다시 한 번 해 주세요.
-                </p>
-              )}
-            </div>
+            <PhotoGroups photos={photos} spots={spots} onView={setViewerUrl} />
           )}
 
           {record.expenses.length > 0 && (
@@ -234,11 +202,12 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
             </button>
           )}
 
-          {/* 수정·지우기 — 기록이 바뀌면(key) 확인 상태도 초기화 */}
-          <EditEraseActions key={record.id} record={record} onEdit={onEdit} onDeleted={close} />
+          {/* 수정·지우기 — 기록이 바뀌면(key) 확인 상태도 초기화.
+              key는 형제와 겹치면 안 됨(겹치면 React 재조정이 꼬여 중복 렌더) → 접두사로 구분 */}
+          <EditEraseActions key={`edit-${record.id}`} record={record} onEdit={onEdit} onDeleted={close} />
 
           <ShareCardSheet
-            key={record.id}
+            key={`share-${record.id}`}
             open={shareOpen}
             onClose={() => setShareOpen(false)}
             fileName={`dohwaji-${record.date}.png`}

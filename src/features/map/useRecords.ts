@@ -221,9 +221,11 @@ export function useCreateRecord(coupleId: string | undefined) {
   });
 }
 
-/** 수정 초안 — photos는 "새로 추가할 사진"만 (기존 사진 관리는 상세 시트의 개별 삭제) */
+/** 수정 초안 — photos는 "새로 추가할 사진", removePhotos는 "지울 기존 사진" */
 export interface RecordUpdateDraft extends RecordDraft {
   recordId: string;
+  /** 수정 화면에서 뺀 기존 사진 (행 삭제 + 스토리지 원본 제거 시도) */
+  removePhotos?: { id: string; storagePath: string }[];
 }
 
 /** ?mock=1 — 수정 초안을 캐시용 RecordRow로 변환 (invalidate하면 목데이터로 되돌아가므로) */
@@ -311,6 +313,18 @@ export function useUpdateRecord(coupleId: string | undefined) {
           })),
         );
         if (expensesError) throw expensesError;
+      }
+
+      // 수정 화면에서 뺀 기존 사진 삭제 (행 → 스토리지 원본)
+      if (draft.removePhotos?.length) {
+        const ids = draft.removePhotos.map((p) => p.id);
+        const { error: delPhotoError } = await supabase.from('record_photos').delete().in('id', ids);
+        if (delPhotoError) throw delPhotoError;
+        try {
+          await supabase.storage.from('photos').remove(draft.removePhotos.map((p) => p.storagePath));
+        } catch {
+          // 행 삭제는 반영 — 원본 제거 실패는 무시 (후속 정리 배치)
+        }
       }
 
       // 새 사진만 추가 업로드 — 기존 사진 뒤에 seq 이어붙임 (핀당 10장 상한은 RLS가 이중 방어)

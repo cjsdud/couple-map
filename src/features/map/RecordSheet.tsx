@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import { coordToRegion, searchPlaces, type KakaoPlace } from '../../shared/lib/kakao';
 import { toDateString } from '../../shared/lib/daily';
@@ -9,11 +9,13 @@ import {
   PRESET_CATEGORIES,
   useCoupleMembers,
   useCreateRecord,
+  useRecordPhotos,
   useRecords,
   useUpdateRecord,
   type ExpenseCategory,
   type ExpenseDraft,
   type PhotoDraft,
+  type RecordPhoto,
   type RecordRow,
   type SpotDraft,
 } from './useRecords';
@@ -52,6 +54,10 @@ export default function RecordSheet({ open, onClose, coupleId, initial, editReco
   const [spots, setSpots] = useState<SpotDraft[]>([]);
   const [expenses, setExpenses] = useState<ExpenseDraft[]>([]);
   const [photos, setPhotos] = useState<PhotoDraft[]>([]);
+  // 수정 모드: 기존 사진을 보여주고, 여기서 지운 것만 저장 시 삭제한다
+  const existingQuery = useRecordPhotos(editRecord?.id);
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const existing = (existingQuery.data ?? []).filter((p) => !removedIds.has(p.id));
   const createRecord = useCreateRecord(coupleId);
   const updateRecord = useUpdateRecord(coupleId);
   const mutation = editRecord ? updateRecord : createRecord;
@@ -94,6 +100,7 @@ export default function RecordSheet({ open, onClose, coupleId, initial, editReco
     setSpots([]);
     setExpenses([]);
     setPhotos([]);
+    setRemovedIds(new Set());
     setAppliedOpen(false);
     createRecord.reset();
     updateRecord.reset();
@@ -121,7 +128,10 @@ export default function RecordSheet({ open, onClose, coupleId, initial, editReco
       photos: status === 'visited' ? photos : [],
     };
     if (editRecord) {
-      updateRecord.mutate({ recordId: editRecord.id, ...draft }, { onSuccess: close });
+      const removePhotos = (existingQuery.data ?? [])
+        .filter((p) => removedIds.has(p.id))
+        .map((p) => ({ id: p.id, storagePath: p.storage_path }));
+      updateRecord.mutate({ recordId: editRecord.id, ...draft, removePhotos }, { onSuccess: close });
     } else {
       createRecord.mutate(draft, { onSuccess: close });
     }
@@ -196,14 +206,13 @@ export default function RecordSheet({ open, onClose, coupleId, initial, editReco
           <SpotEditor spots={spots} onChange={setSpots} status={status} />
 
           {status === 'visited' && (
-            <div className="space-y-1">
-              <PhotoPicker photos={photos} spots={spots} onChange={setPhotos} />
-              {editRecord && (
-                <p className="break-keep text-xs opacity-50">
-                  여기서는 새 사진만 더할 수 있어요 — 이미 넣은 사진은 기록을 열어서 지울 수 있어요
-                </p>
-              )}
-            </div>
+            <PhotoPicker
+              photos={photos}
+              existing={existing}
+              spots={spots}
+              onChange={setPhotos}
+              onRemoveExisting={(id) => setRemovedIds((prev) => new Set(prev).add(id))}
+            />
           )}
 
           <label className="block space-y-1.5">
@@ -251,67 +260,136 @@ export default function RecordSheet({ open, onClose, coupleId, initial, editReco
 
 // ── 사진 첨부 (핀당 10장, 업로드 시 압축·EXIF 제거) ──────────────
 // 스팟 태그는 선택 사항 — 달면 상세에서 스팟별로 묶여 보인다 (plan-multi-region B안)
+
+/** File → 미리보기 objectURL (언마운트/교체 시 해제) */
+function useObjectUrl(file: File): string {
+  const url = useMemo(() => URL.createObjectURL(file), [file]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return url;
+}
+
+/** 새로 고른 사진 한 장 — 썸네일 + 스팟 태그 칩 + 빼기 */
+function NewPhotoRow({
+  photo,
+  spots,
+  onRemove,
+  onTag,
+}: {
+  photo: PhotoDraft;
+  spots: SpotDraft[];
+  onRemove: () => void;
+  onTag: (spotIndex: number | null) => void;
+}) {
+  const url = useObjectUrl(photo.file);
+  return (
+    <li className="flex gap-2 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 p-2">
+      <img src={url} alt="고른 사진" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+      <div className="min-w-0 flex-1 space-y-1">
+        {spots.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={() => onTag(null)}
+              className={`rounded-full px-2 py-0.5 text-[11px] ${
+                photo.spotIndex === null ? 'bg-ink text-paper' : 'border border-ink/15 opacity-60'
+              }`}
+            >
+              스팟 없이
+            </button>
+            {spots.map((s, si) => (
+              <button
+                key={si}
+                type="button"
+                onClick={() => onTag(si)}
+                className={`max-w-28 truncate rounded-full px-2 py-0.5 text-[11px] ${
+                  photo.spotIndex === si ? 'bg-green font-bold text-white' : 'border border-ink/15 opacity-60'
+                }`}
+              >
+                {si + 1} {s.name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs opacity-50">새로 고른 사진</span>
+        )}
+      </div>
+      <button
+        type="button"
+        aria-label="사진 빼기"
+        onClick={onRemove}
+        className="shrink-0 self-start p-1.5 text-sm opacity-40"
+      >
+        ✕
+      </button>
+    </li>
+  );
+}
+
 function PhotoPicker({
   photos,
+  existing,
   spots,
   onChange,
+  onRemoveExisting,
 }: {
   photos: PhotoDraft[];
+  /** 수정 모드에서 이미 저장된 사진 (없으면 새 기록) */
+  existing: RecordPhoto[];
   spots: SpotDraft[];
   onChange: (f: PhotoDraft[]) => void;
+  onRemoveExisting: (id: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const total = existing.length + photos.length;
   const setSpotIndex = (i: number, spotIndex: number | null) =>
     onChange(photos.map((p, j) => (j === i ? { ...p, spotIndex } : p)));
   return (
     <div className="space-y-2">
       <span className="text-sm font-semibold">
-        사진 <span className="opacity-50">({photos.length}/{MAX_PHOTOS})</span>
+        사진 <span className="opacity-50">({total}/{MAX_PHOTOS})</span>
       </span>
+
+      {/* 이미 넣은 사진 — 썸네일 + 빼기 (지우기는 수정 모드에서만) */}
+      {existing.length > 0 && (
+        <div className="grid grid-cols-3 gap-1.5">
+          {existing.map(
+            (p) =>
+              p.signedUrl && (
+                <div key={p.id} className="relative">
+                  <img
+                    src={p.signedUrl}
+                    alt="이미 넣은 사진"
+                    className="aspect-square w-full rounded-xl rounded-tl-sm border border-ink/10 object-cover"
+                  />
+                  <button
+                    type="button"
+                    aria-label="이 사진 빼기"
+                    onClick={() => onRemoveExisting(p.id)}
+                    className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-paper/85 text-sm text-ink shadow-sm active:translate-y-px"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ),
+          )}
+        </div>
+      )}
+
+      {/* 새로 고른 사진 — 썸네일 미리보기 + 스팟 태그 */}
       {photos.length > 0 && (
         <ul className="space-y-1.5">
           {photos.map((p, i) => (
-            <li key={`${p.file.name}-${i}`} className="space-y-1 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2">
-              <div className="flex items-center gap-2 text-xs">
-                <span className="min-w-0 flex-1 truncate">{p.file.name}</span>
-                <button
-                  type="button"
-                  aria-label={`${p.file.name} 빼기`}
-                  onClick={() => onChange(photos.filter((_, j) => j !== i))}
-                  className="-my-1 -mr-1.5 shrink-0 p-1.5 opacity-40"
-                >
-                  ✕
-                </button>
-              </div>
-              {spots.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setSpotIndex(i, null)}
-                    className={`rounded-full px-2 py-0.5 text-[11px] ${
-                      p.spotIndex === null ? 'bg-ink text-paper' : 'border border-ink/15 opacity-60'
-                    }`}
-                  >
-                    스팟 없이
-                  </button>
-                  {spots.map((s, si) => (
-                    <button
-                      key={si}
-                      type="button"
-                      onClick={() => setSpotIndex(i, si)}
-                      className={`max-w-28 truncate rounded-full px-2 py-0.5 text-[11px] ${
-                        p.spotIndex === si ? 'bg-green font-bold text-white' : 'border border-ink/15 opacity-60'
-                      }`}
-                    >
-                      {si + 1} {s.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </li>
+            <NewPhotoRow
+              key={`${p.file.name}-${i}`}
+              photo={p}
+              spots={spots}
+              onRemove={() => onChange(photos.filter((_, j) => j !== i))}
+              onTag={(spotIndex) => setSpotIndex(i, spotIndex)}
+            />
           ))}
         </ul>
       )}
+
       <input
         ref={inputRef}
         type="file"
@@ -319,12 +397,15 @@ function PhotoPicker({
         multiple
         hidden
         onChange={(e) => {
-          const picked = [...(e.target.files ?? [])].map((file): PhotoDraft => ({ file, spotIndex: null }));
-          onChange([...photos, ...picked].slice(0, MAX_PHOTOS));
+          const room = MAX_PHOTOS - total;
+          const picked = [...(e.target.files ?? [])]
+            .slice(0, Math.max(0, room))
+            .map((file): PhotoDraft => ({ file, spotIndex: null }));
+          onChange([...photos, ...picked]);
           e.target.value = '';
         }}
       />
-      {photos.length < MAX_PHOTOS && (
+      {total < MAX_PHOTOS && (
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
