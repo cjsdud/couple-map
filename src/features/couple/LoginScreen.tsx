@@ -81,11 +81,30 @@ function EmailAuth() {
     if (!supabase || busy) return;
     setBusy(true);
     setError(null);
-    if (mode === 'signin') {
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const trimmed = email.trim();
+    if (mode === 'signin' && !trimmed.includes('@')) {
+      // 아이디 로그인 — 매핑은 서버(/api/id-login)에만 있어 이메일이 노출되지 않는다
+      try {
+        const res = await fetch('/api/id-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loginId: trimmed, password }),
+        });
+        if (!res.ok) {
+          setError('아이디 또는 비밀번호를 다시 확인해 주세요');
+        } else {
+          const tokens = (await res.json()) as { access_token: string; refresh_token: string };
+          const { error: sessionError } = await supabase.auth.setSession(tokens);
+          if (sessionError) setError('로그인에 문제가 생겼어요. 다시 시도해 주세요');
+        }
+      } catch {
+        setError('로그인에 문제가 생겼어요. 다시 시도해 주세요');
+      }
+    } else if (mode === 'signin') {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email: trimmed, password });
       if (signInError) setError(friendlyAuthError(signInError.message, mode));
     } else {
-      const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
+      const { data, error: signUpError } = await supabase.auth.signUp({ email: trimmed, password });
       if (signUpError) {
         setError(friendlyAuthError(signUpError.message, mode));
       } else if (!data.session) {
@@ -128,10 +147,10 @@ function EmailAuth() {
       </div>
 
       <input
-        type="email"
+        type={mode === 'signin' ? 'text' : 'email'}
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        placeholder="이메일"
+        placeholder={mode === 'signin' ? '이메일 또는 아이디' : '이메일'}
         autoComplete="username"
         className="w-full rounded-xl border-2 border-ink/15 bg-white/80 px-3 py-2.5 outline-none focus:border-pink"
       />
