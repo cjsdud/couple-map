@@ -83,17 +83,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const { data: mainUser, error: userError } = await admin.auth.admin.getUserById(mainUserId);
     if (userError || !mainUser.user.email) throw userError ?? new Error('본계정 이메일 없음');
-    const { data: link, error: linkError } = await admin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: mainUser.user.email,
-    });
-    if (linkError) throw linkError;
-    const verified = await anon.auth.verifyOtp({
-      type: 'magiclink',
-      token_hash: link.properties.hashed_token,
-    });
-    if (verified.error || !verified.data.session) throw verified.error ?? new Error('세션 발급 실패');
-    sendSession(res, verified.data.session);
+    // 동시 로그인 시 나중 링크가 앞 링크를 무효화할 수 있어 1회 재시도
+    let session: { access_token: string; refresh_token: string } | null = null;
+    for (let attempt = 0; attempt < 2 && !session; attempt++) {
+      const { data: link, error: linkError } = await admin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: mainUser.user.email,
+      });
+      if (linkError) {
+        if (attempt > 0) throw linkError;
+        continue;
+      }
+      const verified = await anon.auth.verifyOtp({
+        type: 'magiclink',
+        token_hash: link.properties.hashed_token,
+      });
+      if (verified.data.session) session = verified.data.session;
+      else if (attempt > 0) throw verified.error ?? new Error('세션 발급 실패');
+    }
+    if (!session) throw new Error('세션 발급 실패');
+    sendSession(res, session);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: '로그인 처리 중 문제가 생겼어요' });
