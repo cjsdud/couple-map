@@ -20,8 +20,8 @@ function useRecapPhotos(recordIds: string[], enabled: boolean) {
     queryKey: ['recap-photos', ...recordIds.slice().sort()],
     enabled: enabled && recordIds.length > 0 && supabase !== null && !isMock(),
     staleTime: 60_000,
-    queryFn: async (): Promise<string[]> => {
-      if (!supabase) return [];
+    queryFn: async (): Promise<{ urls: string[]; total: number }> => {
+      if (!supabase) return { urls: [], total: 0 };
       const { data, error } = await supabase
         .from('record_photos')
         .select('record_id, storage_path, seq')
@@ -44,12 +44,15 @@ function useRecapPhotos(recordIds: string[], enabled: boolean) {
         const rest = recordIds.flatMap((id) => (byRecord.get(id) ?? []).slice(1));
         picks.push(...rest.slice(0, 4 - picks.length));
       }
-      if (picks.length === 0) return [];
+      if (picks.length === 0) return { urls: [], total: data.length };
       const { data: signed, error: signError } = await supabase.storage
         .from('photos')
         .createSignedUrls(picks, 3600);
       if (signError) throw signError;
-      return signed.map((s) => s.signedUrl).filter((u): u is string => Boolean(u));
+      return {
+        urls: signed.map((s) => s.signedUrl).filter((u): u is string => Boolean(u)),
+        total: data.length,
+      };
     },
   });
 }
@@ -86,7 +89,8 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
     target.map((r) => r.id),
     open,
   );
-  const photoUrls = photosQuery.data ?? [];
+  const photoUrls = photosQuery.data?.urls ?? [];
+  const photoTotal = photosQuery.data?.total ?? photoUrls.length;
 
   // 이 달에 처음 칠한 동네: 코드별 최초 방문일이 이 달인 것
   const firstVisit = new Map<string, string>();
@@ -119,6 +123,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
           ],
           regionNames,
           photoUrls,
+          photoTotal,
           footer: null,
         }
       : {
@@ -130,6 +135,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
           ],
           regionNames,
           photoUrls,
+          photoTotal,
           footer: `대한민국 ${conquest.visitedCount}/${conquest.totalCount} 지역에 우리 발자국`,
         };
 

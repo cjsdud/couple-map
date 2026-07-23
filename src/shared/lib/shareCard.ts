@@ -184,22 +184,47 @@ function paintWatermark(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = 'left';
 }
 
-function paintPhotoGrid(ctx: CanvasRenderingContext2D, images: (ImageBitmap | null)[], top: number, height: number) {
+/** total: 전체 사진 수 — 그리드에 못 실린 만큼 마지막 폴라로이드에 "+N" 스티커를 붙인다 */
+function paintPhotoGrid(
+  ctx: CanvasRenderingContext2D,
+  images: (ImageBitmap | null)[],
+  top: number,
+  height: number,
+  total = 0,
+) {
   const shots = images.filter((i): i is ImageBitmap => i !== null).slice(0, 4);
   const cx = CARD_W / 2;
   if (shots.length === 0) return;
+  const places: [number, number, number, number, number][] = [];
   if (shots.length === 1) {
-    polaroid(ctx, shots[0], cx - 400, top, 800, height, -1.6);
+    places.push([cx - 400, top, 800, height, -1.6]);
   } else if (shots.length === 2) {
-    polaroid(ctx, shots[0], cx - 420, top + 14, 410, height - 30, -2.2);
-    polaroid(ctx, shots[1], cx + 14, top, 410, height - 30, 1.8);
+    places.push([cx - 420, top + 14, 410, height - 30, -2.2], [cx + 14, top, 410, height - 30, 1.8]);
   } else {
     const w = 405;
     const h = (height - 26) / 2;
-    polaroid(ctx, shots[0], cx - 420, top, w, h, -2);
-    polaroid(ctx, shots[1], cx + 16, top + 10, w, h, 1.6);
-    polaroid(ctx, shots[2], cx - 414, top + h + 22, w, h, 1.4);
-    if (shots[3]) polaroid(ctx, shots[3], cx + 10, top + h + 30, w, h, -1.8);
+    places.push([cx - 420, top, w, h, -2], [cx + 16, top + 10, w, h, 1.6], [cx - 414, top + h + 22, w, h, 1.4]);
+    if (shots[3]) places.push([cx + 10, top + h + 30, w, h, -1.8]);
+  }
+  for (const [i, shot] of shots.entries()) {
+    const [x, y, w, h, deg] = places[i];
+    polaroid(ctx, shot, x, y, w, h, deg);
+  }
+  const extra = Math.max(0, total - shots.length);
+  if (extra > 0) {
+    const [x, y, w, h] = places[shots.length - 1];
+    const bx = x + w - 28;
+    const by = y + h - 28;
+    ctx.beginPath();
+    ctx.arc(bx, by, 46, 0, Math.PI * 2);
+    ctx.fillStyle = INK;
+    ctx.globalAlpha = 0.82;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.font = `700 34px ${FONT}`;
+    ctx.fillStyle = PAPER;
+    ctx.textAlign = 'center';
+    ctx.fillText(`+${extra}`, bx, by + 12);
   }
 }
 
@@ -236,7 +261,7 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
   ctx.globalAlpha = 1;
 
   const hasPhotos = images.some((i) => i !== null);
-  if (hasPhotos) paintPhotoGrid(ctx, images, 420, 620);
+  if (hasPhotos) paintPhotoGrid(ctx, images, 420, 620, data.photoUrls.length);
 
   if (data.memo) {
     // 사진이 없으면 메모가 주인공 — 중앙에 크게, 사진이 있으면 아래 캡션으로
@@ -356,7 +381,7 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
   // 글이 길수록 사진 영역을 줄여 카드 밖으로 잘리지 않게 (워터마크 자리 110px 확보)
   const photoTop = Math.max(bubbleY + 20, 780);
   const photoH = Math.min(430, CARD_H - 110 - photoTop);
-  if (photoH >= 200) paintPhotoGrid(ctx, images, photoTop, photoH);
+  if (photoH >= 200) paintPhotoGrid(ctx, images, photoTop, photoH, data.photoUrls.length);
   paintWatermark(ctx);
 }
 
@@ -367,6 +392,8 @@ export interface RecapCardData {
   stats: { value: string; label: string }[];
   regionNames: string[];
   photoUrls: string[];
+  /** 전체 사진 수 — photoUrls가 미리 추려진 경우 "+N" 배지 계산용 (없으면 photoUrls 기준) */
+  photoTotal?: number;
   /** 하단 한 줄 (예: "대한민국 8/230 지역에 우리 발자국") */
   footer: string | null;
 }
@@ -406,7 +433,7 @@ export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardD
   }
 
   if (hasPhotos) {
-    paintPhotoGrid(ctx, images, 490, 560);
+    paintPhotoGrid(ctx, images, 490, 560, data.photoTotal ?? data.photoUrls.length);
   } else {
     heartDoodle(ctx, CARD_W / 2, 830, 300, PINK);
   }
