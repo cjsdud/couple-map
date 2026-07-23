@@ -5,46 +5,98 @@ import BottomSheet from './BottomSheet';
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** 카드를 캔버스에 그리는 페인터 (테마 반영) — 열릴 때·테마 변경 시 실행 */
-  paint: (canvas: HTMLCanvasElement, theme: ShareTheme) => Promise<void>;
-  /** 저장 파일명 (예: dohwaji-2026-07-12.png) */
+  /** 카드를 캔버스에 그리는 페인터 (테마·문구 반영) */
+  paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) => Promise<void>;
   fileName: string;
+  /** 문구 입력의 초기값 (예: 기록 메모) */
+  defaultCaption?: string;
+  /** 문구 입력 안내 문구 */
+  captionPlaceholder?: string;
 }
 
 /**
- * 공유 카드 시트 — 테마를 고르고, 미리보기 후 공유하기·이미지 저장.
+ * 공유 카드 시트 — 테마·문구를 고쳐가며 미리보기 후 공유하기·이미지 저장.
  * BottomSheet 안 레이어 (IA 원칙: 새 화면 금지).
  */
-export default function ShareCardSheet({ open, onClose, paint, fileName }: Props) {
+export default function ShareCardSheet({
+  open,
+  onClose,
+  paint,
+  fileName,
+  defaultCaption = '',
+  captionPlaceholder = '문구 넣기 (선택)',
+}: Props) {
   const [theme, setTheme] = useState<ShareTheme>('paper');
+  const [caption, setCaption] = useState(defaultCaption);
+  const applied = useDebounced(caption, 450);
+
   return (
     <BottomSheet open={open} onClose={onClose} title="공유 카드">
       <div className="space-y-3 pb-2">
         <ThemePicker theme={theme} onPick={setTheme} />
-        {/* theme을 key로 — 테마가 바뀌면 새로 그린다 */}
-        <CardPreview key={theme} paint={(canvas) => paint(canvas, theme)} fileName={fileName} />
+        <CaptionField value={caption} onChange={setCaption} placeholder={captionPlaceholder} />
+        {/* theme·문구가 바뀌면 새로 그린다 */}
+        <CardPreview
+          key={`${theme}|${applied}`}
+          paint={(canvas) => paint(canvas, theme, applied)}
+          fileName={fileName}
+        />
       </div>
     </BottomSheet>
   );
 }
 
-/** 테마 선택 칩 — 공유/종합 카드 시트 공용 */
+/** 잦은 재렌더 방지 — 입력이 멈춘 뒤에만 값 반영 */
+function useDebounced<T>(value: T, delay: number): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return v;
+}
+
+export function CaptionField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-semibold opacity-50">문구</p>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        maxLength={80}
+        placeholder={placeholder}
+        className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink"
+      />
+    </div>
+  );
+}
+
+/** 테마 선택 칩 — 공유/종합 카드 시트 공용 (6종, 3열 그리드) */
 export function ThemePicker({ theme, onPick }: { theme: ShareTheme; onPick: (t: ShareTheme) => void }) {
   return (
     <div>
       <p className="mb-1.5 text-xs font-semibold opacity-50">테마</p>
-      <div className="flex gap-2">
+      <div className="grid grid-cols-3 gap-2">
         {SHARE_THEMES.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => onPick(t.key)}
-            className={`flex flex-1 flex-col items-center gap-1 rounded-2xl rounded-tl-md border-2 py-2 text-xs font-semibold active:translate-y-px ${
+            className={`flex items-center justify-center gap-1.5 rounded-2xl rounded-tl-md border-2 py-2 text-xs font-semibold active:translate-y-px ${
               theme === t.key ? 'border-pink bg-pink/10' : 'border-ink/15 bg-white/60'
             }`}
           >
             <span
-              className="h-6 w-6 rounded-full border border-ink/15"
+              className="h-4 w-4 shrink-0 rounded-full border border-ink/15"
               style={{ backgroundColor: t.swatch }}
               aria-hidden
             />

@@ -10,13 +10,15 @@ export const CARD_H = 1350;
 const FONT = '-apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 
 // ── 테마 ──────────────────────────────────────────────────────────
-export type ShareTheme = 'paper' | 'film' | 'mono' | 'sunset';
+export type ShareTheme = 'paper' | 'film' | 'mono' | 'sunset' | 'vintage' | 'pastel';
 
 export const SHARE_THEMES: { key: ShareTheme; label: string; swatch: string }[] = [
   { key: 'paper', label: '도화지', swatch: '#fdfcf7' },
   { key: 'film', label: '필름', swatch: '#211e1b' },
   { key: 'mono', label: '미니멀', swatch: '#ffffff' },
-  { key: 'sunset', label: '노을', swatch: '#c96b6b' },
+  { key: 'sunset', label: '노을', swatch: '#7a3b52' },
+  { key: 'vintage', label: '빈티지', swatch: '#c9a66b' },
+  { key: 'pastel', label: '파스텔', swatch: '#f4c9dd' },
 ];
 
 interface Skin {
@@ -114,6 +116,54 @@ const SKINS: Record<ShareTheme, Skin> = {
       g.addColorStop(0, '#2a1a2e');
       g.addColorStop(0.55, '#7a3b52');
       g.addColorStop(1, '#c96b6b');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
+    },
+  },
+  vintage: {
+    ink: '#4a3b2a',
+    headerDeco: 'tape',
+    frame: { mat: '#f4ead2', pad: 18, radius: 8, shadow: 0.22, border: 'rgba(74,59,42,0.28)' },
+    bubbleMe: '#7d8a63',
+    bubblePartner: '#a8613f',
+    bubbleAlpha: 0.3,
+    bubbleInk: '#4a3b2a',
+    badgeBg: '#4a3b2a',
+    badgeInk: '#f4ead2',
+    accentFor: () => '#a8613f',
+    paintBg: (ctx) => {
+      ctx.fillStyle = '#e8dcc0';
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
+      // 세피아 비네트 — 모서리를 살짝 그을린 오래된 사진 느낌
+      const g = ctx.createRadialGradient(CARD_W / 2, CARD_H / 2, CARD_H * 0.3, CARD_W / 2, CARD_H / 2, CARD_H * 0.72);
+      g.addColorStop(0, 'rgba(74,59,42,0)');
+      g.addColorStop(1, 'rgba(74,59,42,0.22)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
+      ctx.strokeStyle = 'rgba(74,59,42,0.4)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(38, 38, CARD_W - 76, CARD_H - 76);
+      ctx.strokeStyle = 'rgba(74,59,42,0.2)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(48, 48, CARD_W - 96, CARD_H - 96);
+    },
+  },
+  pastel: {
+    ink: '#5b5570',
+    headerDeco: 'rule',
+    frame: { mat: '#ffffff', pad: 16, radius: 20, shadow: 0.16, border: null },
+    bubbleMe: '#a6c8f4',
+    bubblePartner: '#f4a6c0',
+    bubbleAlpha: 0.42,
+    bubbleInk: '#5b5570',
+    badgeBg: '#c9a6e0',
+    badgeInk: '#ffffff',
+    accentFor: () => '#e58ab0',
+    paintBg: (ctx) => {
+      const g = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+      g.addColorStop(0, '#fdeef4');
+      g.addColorStop(0.5, '#eef0fb');
+      g.addColorStop(1, '#e9f6f1');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, CARD_W, CARD_H);
     },
@@ -432,6 +482,8 @@ export interface DayCardData {
   partnerAnswer: string | null;
   photoUrls: string[];
   theme?: ShareTheme;
+  /** 사용자가 직접 넣는 한마디 (선택) — 사진 아래 인용구로 */
+  caption?: string | null;
 }
 
 export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData) {
@@ -511,9 +563,24 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     ctx.globalAlpha = 1;
   }
 
+  // 문구가 있으면 하단에 인용구 자리를 비워둔다
+  const caption = data.caption?.trim();
+  const bottomReserve = caption ? 200 : 110;
   const photoTop = Math.max(bubbleY + 20, 780);
-  const photoH = Math.min(430, CARD_H - 110 - photoTop);
+  const photoH = Math.min(430, CARD_H - bottomReserve - photoTop);
   if (photoH >= 200) paintPhotoGrid(ctx, images, photoTop, photoH, skin, data.photoUrls.length);
+
+  if (caption) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = skin.ink;
+    ctx.globalAlpha = 0.8;
+    ctx.font = `500 36px ${FONT}`;
+    const lines = wrapText(ctx, `“${caption}”`, CARD_W - 240, 2);
+    const capY = CARD_H - 150 - (lines.length - 1) * 46;
+    for (const [i, line] of lines.entries()) ctx.fillText(line, CARD_W / 2, capY + i * 46);
+    ctx.globalAlpha = 1;
+  }
+
   paintWatermark(ctx, skin);
 }
 

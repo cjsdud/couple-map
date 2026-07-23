@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { paintRecapCard, type RecapCardData, type ShareTheme } from '../../shared/lib/shareCard';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
-import { CardPreview, ThemePicker } from '../../shared/ui/ShareCardSheet';
+import { CaptionField, CardPreview, ThemePicker } from '../../shared/ui/ShareCardSheet';
 import { useGrass } from '../today/useToday';
 import { useConquest } from './useConquest';
 import { isMock, useRecords } from './useRecords';
@@ -73,6 +73,13 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const thisMonth = now.getMonth() + 1;
   const [scope, setScope] = useState<Scope>('month');
   const [theme, setTheme] = useState<ShareTheme>('paper');
+  const [caption, setCaption] = useState('');
+  // 입력이 멈춘 뒤에만 반영 (매 타건 재렌더 방지)
+  const [appliedCaption, setAppliedCaption] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setAppliedCaption(caption), 450);
+    return () => clearTimeout(t);
+  }, [caption]);
   const [view, setView] = useState({ year: thisYear, month: thisMonth });
   const isCurrentMonth = view.year === thisYear && view.month === thisMonth;
 
@@ -113,6 +120,8 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   ];
   const regionNames = codes.map((c) => sigunguNames[c]).filter((n): n is string => Boolean(n));
 
+  // 문구를 넣으면 하단 한 줄을 대체, 비우면 기본 문구 유지
+  const typed = appliedCaption.trim();
   const card: RecapCardData =
     scope === 'month'
       ? {
@@ -126,7 +135,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
           regionNames,
           photoUrls,
           photoTotal,
-          footer: null,
+          footer: typed || null,
         }
       : {
           theme,
@@ -139,13 +148,13 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
           regionNames,
           photoUrls,
           photoTotal,
-          footer: `대한민국 ${conquest.visitedCount}/${conquest.totalCount} 지역에 우리 발자국`,
+          footer: typed || `대한민국 ${conquest.visitedCount}/${conquest.totalCount} 지역에 우리 발자국`,
         };
 
   const empty = target.length === 0;
   const loading = photosQuery.isFetching || grassQuery.isFetching || namesQuery.isFetching;
   // 범위·월·데이터가 바뀌면 새로 그린다 (CardPreview는 마운트 시 1회만 그리므로 key로 제어)
-  const cardKey = `${theme}-${scope}-${monthKey}-${photoUrls.length}-${bothDays}-${regionNames.length}`;
+  const cardKey = `${theme}-${scope}-${monthKey}-${photoUrls.length}-${bothDays}-${regionNames.length}-${typed}`;
 
   const goPrev = () =>
     setView((v) => (v.month === 1 ? { year: v.year - 1, month: 12 } : { year: v.year, month: v.month - 1 }));
@@ -200,7 +209,12 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
           )}
         </div>
 
-        {!empty && <ThemePicker theme={theme} onPick={setTheme} />}
+        {!empty && (
+          <>
+            <ThemePicker theme={theme} onPick={setTheme} />
+            <CaptionField value={caption} onChange={setCaption} placeholder="한마디 남기기 (선택)" />
+          </>
+        )}
 
         {empty ? (
           <div className="space-y-1 py-10 text-center">

@@ -765,10 +765,12 @@ function DayDetailSheet({
           </button>
 
           <ShareCardSheet
+            key={date}
             open={shareOpen}
             onClose={() => setShareOpen(false)}
             fileName={`dohwaji-${date}.png`}
-            paint={(canvas, theme) =>
+            captionPlaceholder="한마디 남기기 (선택)"
+            paint={(canvas, theme, caption) =>
               paintDayCard(canvas, {
                 theme,
                 date,
@@ -780,6 +782,7 @@ function DayDetailSheet({
                 myAnswer: myEntry?.answer ?? null,
                 partnerAnswer: partnerEntry?.answer ?? null,
                 photoUrls: photoUrls.map((p) => p.signedUrl as string),
+                caption: caption || null,
               })
             }
           />

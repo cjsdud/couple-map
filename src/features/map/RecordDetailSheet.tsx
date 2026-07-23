@@ -238,15 +238,18 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
           <EditEraseActions key={record.id} record={record} onEdit={onEdit} onDeleted={close} />
 
           <ShareCardSheet
+            key={record.id}
             open={shareOpen}
             onClose={() => setShareOpen(false)}
             fileName={`dohwaji-${record.date}.png`}
-            paint={(canvas, theme) =>
+            defaultCaption={record.memo ?? ''}
+            captionPlaceholder="한마디 남기기 (선택)"
+            paint={(canvas, theme, caption) =>
               paintRecordCard(canvas, {
                 theme,
                 date: record.date,
                 spotNames: spots.map((s) => s.name),
-                memo: record.memo,
+                memo: caption,
                 regionNames: [
                   ...new Set(
                     spots
