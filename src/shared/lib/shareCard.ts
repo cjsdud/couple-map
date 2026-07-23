@@ -353,7 +353,10 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     ctx.globalAlpha = 1;
   }
 
-  paintPhotoGrid(ctx, images, Math.max(bubbleY + 20, 780), 420);
+  // 글이 길수록 사진 영역을 줄여 카드 밖으로 잘리지 않게 (워터마크 자리 110px 확보)
+  const photoTop = Math.max(bubbleY + 20, 780);
+  const photoH = Math.min(430, CARD_H - 110 - photoTop);
+  if (photoH >= 200) paintPhotoGrid(ctx, images, photoTop, photoH);
   paintWatermark(ctx);
 }
 
