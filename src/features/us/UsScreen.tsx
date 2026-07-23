@@ -38,7 +38,6 @@ export default function UsScreen() {
         nickname={profile?.nickname ?? (isMock ? '체리' : '')}
         mock={isMock}
         dayCutoff={couple?.day_cutoff ?? 0}
-        ratioA={couple?.ratio_a ?? 50}
         startedAt={startedAt}
       />
     </main>
@@ -255,7 +254,6 @@ function SettingsCard({
   nickname,
   mock,
   dayCutoff,
-  ratioA,
   startedAt,
 }: {
   coupleId: string | undefined;
@@ -263,7 +261,6 @@ function SettingsCard({
   nickname: string;
   mock: boolean;
   dayCutoff: number;
-  ratioA: number;
   startedAt: string | null;
 }) {
   const update = useUpdateCouple(coupleId, userId);
@@ -361,24 +358,7 @@ function SettingsCard({
         </select>
       </label>
 
-      <label className="block space-y-1.5">
-        <span className="text-sm">
-          데이트 비용 나누기 <span className="text-xs opacity-50">— 가계부 카드가 이 비율을 기준으로 이야기해요</span>
-        </span>
-        <select
-          value={ratioA}
-          disabled={disabled}
-          onChange={(e) => update.mutate({ ratio_a: Number(e.target.value) })}
-          className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink disabled:opacity-50"
-        >
-          {[50, 60, 70, 40, 30].map((r) => (
-            <option key={r} value={r}>
-              {r === 50 ? '반반 (기본)' : `내가 ${r}%`}
-            </option>
-          ))}
-        </select>
-      </label>
-
+      {/* '데이트 비용 나누기' 설정은 제거 — 낸 사람은 지출 입력 때 이미 고르므로 (사용자 결정 2026-07-23) */}
       {supabase && (
         <button
           type="button"
