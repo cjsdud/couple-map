@@ -20,8 +20,11 @@ const TIER_FILL = [0, 0.14, 0.2, 0.26, 0.33, 0.4];
  */
 export default function KakaoBaseMap({
   onSelectRecord,
+  onError,
 }: {
   onSelectRecord?: (recordId: string) => void;
+  /** SDK 로드 실패 시 — 부모가 도화지 모드로 폴백할 수 있게 알린다 */
+  onError?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<kakao.maps.Map | null>(null);
@@ -39,6 +42,10 @@ export default function KakaoBaseMap({
   });
 
   // 지도 초기화 (1회)
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  });
   useEffect(() => {
     let cancelled = false;
     void loadKakaoMaps()
@@ -53,7 +60,9 @@ export default function KakaoBaseMap({
         setStatus('ready');
       })
       .catch(() => {
-        if (!cancelled) setStatus('error');
+        if (cancelled) return;
+        setStatus('error');
+        onErrorRef.current?.();
       });
     return () => {
       cancelled = true;

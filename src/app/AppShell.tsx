@@ -15,6 +15,11 @@ type TabKey = (typeof TABS)[number]['key'];
 export default function AppShell() {
   const [tab, setTab] = useState<TabKey>('map');
   const Screen = TABS.find((t) => t.key === tab)!.screen;
+  // 탭을 바꾸면 맨 위부터 — 이전 탭의 스크롤 위치가 남아 중간부터 보이는 문제 방지
+  const pickTab = (key: TabKey) => {
+    setTab(key);
+    window.scrollTo(0, 0);
+  };
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col">
@@ -27,7 +32,7 @@ export default function AppShell() {
             <button
               key={t.key}
               type="button"
-              onClick={() => setTab(t.key)}
+              onClick={() => pickTab(t.key)}
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs ${
                 tab === t.key ? 'font-bold text-pink' : 'text-ink/50'
               }`}

@@ -120,7 +120,8 @@ export default function MapScreen() {
             </div>
           )}
           {mapMode === 'real' && KAKAO_JS_KEY ? (
-            <KakaoBaseMap onSelectRecord={setDetailId} />
+            // 실지도 로드 실패 → 이번 세션은 도화지로 자동 폴백 (저장 안 함 — 다음에 다시 시도)
+            <KakaoBaseMap onSelectRecord={setDetailId} onError={() => setMapMode('paper')} />
           ) : (
             <ConquestMap onSelectRecord={setDetailId} />
           )}
