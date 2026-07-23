@@ -1,20 +1,130 @@
 /**
- * 공유 카드 페인터 (명세 §7 바이럴 설계의 v1 선행 — 기록·오늘 2종).
- * 인스타 세로 규격 1080×1350, 도화지 감성(종이 톤·마스킹테이프·폴라로이드 프레임).
+ * 공유 카드 페인터 (명세 §7 바이럴 설계) — 기록·오늘·종합 3종.
+ * 인스타 세로 규격 1080×1350. 테마 4종(도화지·필름·미니멀·노을)을 골라 낼 수 있다.
  * 원칙: 지출은 카드에서 자동 제외 (명세 §4 공유 격리).
  */
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
 
-const PAPER = '#fdfcf7';
-const INK = '#3b3733';
-const PINK = '#e8637c';
-const GREEN = '#8cab68';
-const YELLOW = '#f2c14e';
-
 const FONT = '-apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
 
+// ── 테마 ──────────────────────────────────────────────────────────
+export type ShareTheme = 'paper' | 'film' | 'mono' | 'sunset';
+
+export const SHARE_THEMES: { key: ShareTheme; label: string; swatch: string }[] = [
+  { key: 'paper', label: '도화지', swatch: '#fdfcf7' },
+  { key: 'film', label: '필름', swatch: '#211e1b' },
+  { key: 'mono', label: '미니멀', swatch: '#ffffff' },
+  { key: 'sunset', label: '노을', swatch: '#c96b6b' },
+];
+
+interface Skin {
+  ink: string; // 본문 텍스트
+  headerDeco: 'tape' | 'rule'; // 제목 위 장식 (마스킹테이프 / 짧은 선)
+  frame: { mat: string; pad: number; radius: number; shadow: number; border: string | null };
+  bubbleMe: string;
+  bubblePartner: string;
+  bubbleAlpha: number;
+  bubbleInk: string;
+  badgeBg: string;
+  badgeInk: string;
+  /** 카드별 기본 강조색(pink/yellow/green)을 테마에 맞게 변환 */
+  accentFor: (base: string) => string;
+  paintBg: (ctx: CanvasRenderingContext2D) => void;
+}
+
+const SKINS: Record<ShareTheme, Skin> = {
+  paper: {
+    ink: '#3b3733',
+    headerDeco: 'tape',
+    frame: { mat: '#ffffff', pad: 18, radius: 10, shadow: 0.25, border: null },
+    bubbleMe: '#9ec3d8',
+    bubblePartner: '#e8637c',
+    bubbleAlpha: 0.35,
+    bubbleInk: '#3b3733',
+    badgeBg: '#3b3733',
+    badgeInk: '#fdfcf7',
+    accentFor: (base) => base,
+    paintBg: (ctx) => {
+      ctx.fillStyle = '#fdfcf7';
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
+      ctx.strokeStyle = '#3b3733';
+      ctx.globalAlpha = 0.18;
+      ctx.lineWidth = 3;
+      ctx.save();
+      ctx.translate(CARD_W / 2, CARD_H / 2);
+      ctx.rotate(-0.004);
+      ctx.strokeRect(-CARD_W / 2 + 36, -CARD_H / 2 + 36, CARD_W - 72, CARD_H - 72);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    },
+  },
+  film: {
+    ink: '#f3ede3',
+    headerDeco: 'rule',
+    frame: { mat: '#0e0d0c', pad: 16, radius: 6, shadow: 0.5, border: 'rgba(224,161,90,0.5)' },
+    bubbleMe: '#8aa2ad',
+    bubblePartner: '#d98a97',
+    bubbleAlpha: 0.22,
+    bubbleInk: '#f3ede3',
+    badgeBg: '#e0a15a',
+    badgeInk: '#211e1b',
+    accentFor: () => '#e0a15a',
+    paintBg: (ctx) => {
+      ctx.fillStyle = '#211e1b';
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
+      ctx.strokeStyle = 'rgba(224,161,90,0.5)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(40, 40, CARD_W - 80, CARD_H - 80);
+    },
+  },
+  mono: {
+    ink: '#1a1a1a',
+    headerDeco: 'rule',
+    frame: { mat: '#ffffff', pad: 14, radius: 4, shadow: 0.14, border: 'rgba(0,0,0,0.08)' },
+    bubbleMe: '#111111',
+    bubblePartner: '#111111',
+    bubbleAlpha: 0.06,
+    bubbleInk: '#1a1a1a',
+    badgeBg: '#1a1a1a',
+    badgeInk: '#ffffff',
+    accentFor: () => '#1a1a1a',
+    paintBg: (ctx) => {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
+      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(48, 48, CARD_W - 96, CARD_H - 96);
+    },
+  },
+  sunset: {
+    ink: '#fff5ef',
+    headerDeco: 'rule',
+    frame: { mat: '#ffffff', pad: 16, radius: 14, shadow: 0.28, border: null },
+    bubbleMe: '#ffffff',
+    bubblePartner: '#ffffff',
+    bubbleAlpha: 0.16,
+    bubbleInk: '#fff5ef',
+    badgeBg: '#ffd28a',
+    badgeInk: '#3a1f2e',
+    accentFor: () => '#ffd28a',
+    paintBg: (ctx) => {
+      const g = ctx.createLinearGradient(0, 0, 0, CARD_H);
+      g.addColorStop(0, '#2a1a2e');
+      g.addColorStop(0.55, '#7a3b52');
+      g.addColorStop(1, '#c96b6b');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, CARD_W, CARD_H);
+    },
+  },
+};
+
+function resolveSkin(theme: ShareTheme | undefined): Skin {
+  return SKINS[theme ?? 'paper'];
+}
+
+// ── 공통 헬퍼 ────────────────────────────────────────────────────
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -25,30 +135,47 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-/** 마스킹테이프 조각 */
-function tape(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number, h: number, deg: number, color: string) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate((deg * Math.PI) / 180);
-  ctx.globalAlpha = 0.85;
-  ctx.fillStyle = color;
-  roundRect(ctx, -w / 2, -h / 2, w, h, 6);
-  ctx.fill();
-  ctx.globalAlpha = 0.35;
-  ctx.strokeStyle = PAPER;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(-w / 2 + 12, -h / 6);
-  ctx.lineTo(w / 2 - 12, -h / 6);
-  ctx.moveTo(-w / 2 + 12, h / 6);
-  ctx.lineTo(w / 2 - 12, h / 6);
-  ctx.stroke();
-  ctx.restore();
-  ctx.globalAlpha = 1;
+/** 제목 위 장식 — 도화지는 마스킹테이프, 나머지는 짧은 강조선 */
+function paintHeaderDeco(ctx: CanvasRenderingContext2D, skin: Skin, color: string, deg: number) {
+  if (skin.headerDeco === 'tape') {
+    const cx = CARD_W / 2;
+    const cy = 96;
+    const w = 300;
+    const h = 74;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((deg * Math.PI) / 180);
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = color;
+    roundRect(ctx, -w / 2, -h / 2, w, h, 6);
+    ctx.fill();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = '#fdfcf7';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-w / 2 + 12, -h / 6);
+    ctx.lineTo(w / 2 - 12, -h / 6);
+    ctx.moveTo(-w / 2 + 12, h / 6);
+    ctx.lineTo(w / 2 - 12, h / 6);
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  } else {
+    // 짧은 강조선
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(CARD_W / 2 - 48, 110);
+    ctx.lineTo(CARD_W / 2 + 48, 110);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
-/** 사진을 cover로 그려주는 폴라로이드 프레임 */
-function polaroid(
+/** 사진 프레임 (테마별 매트·테두리·그림자) — cover-fit */
+function photoFrame(
   ctx: CanvasRenderingContext2D,
   img: ImageBitmap | HTMLImageElement,
   x: number,
@@ -56,19 +183,27 @@ function polaroid(
   w: number,
   h: number,
   deg: number,
+  skin: Skin,
 ) {
-  const pad = 18;
+  const { mat, pad, radius, shadow, border } = skin.frame;
   ctx.save();
   ctx.translate(x + w / 2, y + h / 2);
   ctx.rotate((deg * Math.PI) / 180);
-  ctx.shadowColor = 'rgba(59,55,51,0.25)';
-  ctx.shadowBlur = 24;
-  ctx.shadowOffsetY = 10;
-  ctx.fillStyle = '#ffffff';
-  roundRect(ctx, -w / 2, -h / 2, w, h, 10);
+  if (shadow > 0) {
+    ctx.shadowColor = `rgba(20,16,12,${shadow})`;
+    ctx.shadowBlur = 26;
+    ctx.shadowOffsetY = 11;
+  }
+  ctx.fillStyle = mat;
+  roundRect(ctx, -w / 2, -h / 2, w, h, radius);
   ctx.fill();
   ctx.shadowColor = 'transparent';
-  // cover-fit
+  if (border) {
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 2;
+    roundRect(ctx, -w / 2, -h / 2, w, h, radius);
+    ctx.stroke();
+  }
   const iw = 'width' in img ? img.width : 0;
   const ih = 'height' in img ? img.height : 0;
   const dw = w - pad * 2;
@@ -77,7 +212,7 @@ function polaroid(
   const sw = dw / scale;
   const sh = dh / scale;
   ctx.save();
-  roundRect(ctx, -w / 2 + pad, -h / 2 + pad, dw, dh, 6);
+  roundRect(ctx, -w / 2 + pad, -h / 2 + pad, dw, dh, Math.max(2, radius - 4));
   ctx.clip();
   ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, -w / 2 + pad, -h / 2 + pad, dw, dh);
   ctx.restore();
@@ -113,22 +248,7 @@ async function loadImage(url: string): Promise<ImageBitmap | null> {
   }
 }
 
-function paintBase(ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = PAPER;
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
-  // 손그림 테두리 (살짝 기운 이중 프레임)
-  ctx.strokeStyle = INK;
-  ctx.globalAlpha = 0.18;
-  ctx.lineWidth = 3;
-  ctx.save();
-  ctx.translate(CARD_W / 2, CARD_H / 2);
-  ctx.rotate(-0.004);
-  ctx.strokeRect(-CARD_W / 2 + 36, -CARD_H / 2 + 36, CARD_W - 72, CARD_H - 72);
-  ctx.restore();
-  ctx.globalAlpha = 1;
-}
-
-/** 사진이 없을 때 가운데를 채우는 크레용 하트 낙서 */
+/** 사진이 없을 때 가운데를 채우는 점선 하트 낙서 */
 function heartDoodle(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string) {
   const s = size / 2;
   ctx.save();
@@ -152,44 +272,53 @@ function heartDoodle(ctx: CanvasRenderingContext2D, cx: number, cy: number, size
   ctx.globalAlpha = 1;
 }
 
-/** 좌하단 정복 지역 칩 — 3개까지 + "외 N곳", 워터마크 영역은 침범하지 않는다 */
-function paintRegionChips(ctx: CanvasRenderingContext2D, names: string[]) {
-  if (names.length === 0) return;
-  ctx.textAlign = 'left';
-  const shown = names.slice(0, 3);
-  const labels = names.length > shown.length ? [...shown, `외 ${names.length - shown.length}곳`] : shown;
-  let chipX = 64;
+/** "서울 마포구", "강원 춘천시" → "#서울 #마포구 #강원 #춘천시" (중복 제거) */
+function toHashtags(names: string[]): string {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const name of names) {
+    for (const part of name.split(/\s+/)) {
+      const t = part.trim();
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      tags.push(`#${t}`);
+    }
+  }
+  return tags.join(' ');
+}
+
+/** 좌하단 정복 지역 — 인스타 감성 해시태그 (#부산 #해운대구…), 최대 2줄 */
+function paintRegionHashtags(ctx: CanvasRenderingContext2D, names: string[], color: string) {
+  const text = toHashtags(names);
+  if (!text) return;
   ctx.font = `700 30px ${FONT}`;
-  for (const label of labels) {
-    const w = ctx.measureText(label).width + 48;
-    if (chipX + w > CARD_W - 320) break;
-    ctx.fillStyle = GREEN;
-    ctx.globalAlpha = 0.9;
-    roundRect(ctx, chipX, CARD_H - 100, w, 52, 26);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(label, chipX + 24, CARD_H - 64);
-    chipX += w + 14;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'left';
+  // 워터마크(우하단)와 겹치지 않게 폭 제한
+  const lines = wrapText(ctx, text, CARD_W - 360, 2);
+  const baseY = CARD_H - 66;
+  for (const [i, line] of lines.entries()) {
+    ctx.fillText(line, 64, baseY - (lines.length - 1 - i) * 42);
   }
 }
 
-function paintWatermark(ctx: CanvasRenderingContext2D) {
-  ctx.font = `600 30px ${FONT}`;
-  ctx.fillStyle = INK;
-  ctx.globalAlpha = 0.45;
+function paintWatermark(ctx: CanvasRenderingContext2D, skin: Skin) {
+  ctx.font = `600 28px ${FONT}`;
+  ctx.fillStyle = skin.ink;
+  ctx.globalAlpha = 0.5;
   ctx.textAlign = 'right';
   ctx.fillText('우리의 도화지 🖍️', CARD_W - 64, CARD_H - 64);
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
 
-/** total: 전체 사진 수 — 그리드에 못 실린 만큼 마지막 폴라로이드에 "+N" 스티커를 붙인다 */
+/** total: 전체 사진 수 — 그리드에 못 실린 만큼 마지막 프레임에 "+N" 스티커 */
 function paintPhotoGrid(
   ctx: CanvasRenderingContext2D,
   images: (ImageBitmap | null)[],
   top: number,
   height: number,
+  skin: Skin,
   total = 0,
 ) {
   const shots = images.filter((i): i is ImageBitmap => i !== null).slice(0, 4);
@@ -208,7 +337,7 @@ function paintPhotoGrid(
   }
   for (const [i, shot] of shots.entries()) {
     const [x, y, w, h, deg] = places[i];
-    polaroid(ctx, shot, x, y, w, h, deg);
+    photoFrame(ctx, shot, x, y, w, h, deg, skin);
   }
   const extra = Math.max(0, total - shots.length);
   if (extra > 0) {
@@ -217,23 +346,25 @@ function paintPhotoGrid(
     const by = y + h - 28;
     ctx.beginPath();
     ctx.arc(bx, by, 46, 0, Math.PI * 2);
-    ctx.fillStyle = INK;
-    ctx.globalAlpha = 0.82;
+    ctx.fillStyle = skin.badgeBg;
+    ctx.globalAlpha = 0.92;
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.font = `700 34px ${FONT}`;
-    ctx.fillStyle = PAPER;
+    ctx.fillStyle = skin.badgeInk;
     ctx.textAlign = 'center';
     ctx.fillText(`+${extra}`, bx, by + 12);
   }
 }
 
+// ── 기록 카드 ────────────────────────────────────────────────────
 export interface RecordCardData {
   date: string;
   spotNames: string[];
   memo: string | null;
   regionNames: string[];
   photoUrls: string[];
+  theme?: ShareTheme;
 }
 
 /** 데이트 기록 카드 — 지출은 명세 §4 원칙대로 넣지 않는다 */
@@ -242,12 +373,14 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
   canvas.height = CARD_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas 미지원');
+  const skin = resolveSkin(data.theme);
+  const accent = skin.accentFor('#e8637c');
   const images = await Promise.all(data.photoUrls.slice(0, 4).map(loadImage));
 
-  paintBase(ctx);
-  tape(ctx, CARD_W / 2, 96, 300, 74, -3.5, PINK);
+  skin.paintBg(ctx);
+  paintHeaderDeco(ctx, skin, accent, -3.5);
 
-  ctx.fillStyle = INK;
+  ctx.fillStyle = skin.ink;
   ctx.textAlign = 'center';
   ctx.font = `700 58px ${FONT}`;
   ctx.fillText(data.date.replace(/-/g, '. '), CARD_W / 2, 220);
@@ -261,12 +394,12 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
   ctx.globalAlpha = 1;
 
   const hasPhotos = images.some((i) => i !== null);
-  if (hasPhotos) paintPhotoGrid(ctx, images, 420, 620, data.photoUrls.length);
+  if (hasPhotos) paintPhotoGrid(ctx, images, 420, 620, skin, data.photoUrls.length);
 
   if (data.memo) {
-    // 사진이 없으면 메모가 주인공 — 중앙에 크게, 사진이 있으면 아래 캡션으로
-    ctx.fillStyle = INK;
-    ctx.globalAlpha = 0.75;
+    ctx.fillStyle = skin.ink;
+    ctx.globalAlpha = 0.78;
+    ctx.textAlign = 'center';
     if (hasPhotos) {
       ctx.font = `500 38px ${FONT}`;
       for (const [i, line] of wrapText(ctx, `“${data.memo}”`, CARD_W - 240, 2).entries()) {
@@ -283,10 +416,11 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
     ctx.globalAlpha = 1;
   }
 
-  paintRegionChips(ctx, data.regionNames);
-  paintWatermark(ctx);
+  paintRegionHashtags(ctx, data.regionNames, accent);
+  paintWatermark(ctx, skin);
 }
 
+// ── 오늘(하루) 카드 ──────────────────────────────────────────────
 export interface DayCardData {
   date: string;
   myMood: string | null;
@@ -297,32 +431,32 @@ export interface DayCardData {
   myAnswer: string | null;
   partnerAnswer: string | null;
   photoUrls: string[];
+  theme?: ShareTheme;
 }
 
-/** 오늘(하루) 카드 — 기분·일기·질문 답·사진 */
 export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData) {
   canvas.width = CARD_W;
   canvas.height = CARD_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas 미지원');
+  const skin = resolveSkin(data.theme);
+  const accent = skin.accentFor('#f2c14e');
   const images = await Promise.all(data.photoUrls.slice(0, 2).map(loadImage));
 
-  paintBase(ctx);
-  tape(ctx, CARD_W / 2, 96, 300, 74, 3, YELLOW);
+  skin.paintBg(ctx);
+  paintHeaderDeco(ctx, skin, accent, 3);
 
-  ctx.fillStyle = INK;
+  ctx.fillStyle = skin.ink;
   ctx.textAlign = 'center';
   ctx.font = `700 54px ${FONT}`;
   const [y, m, d] = data.date.split('-');
   ctx.fillText(`${y}년 ${Number(m)}월 ${Number(d)}일의 우리`, CARD_W / 2, 214);
 
-  // 기분
   if (data.myMood || data.partnerMood) {
     ctx.font = `400 110px ${FONT}`;
     ctx.fillText(`${data.myMood ?? ''}  ${data.partnerMood ?? ''}`.trim(), CARD_W / 2, 380);
   }
 
-  // 한 줄 일기 말풍선
   let bubbleY = 460;
   const bubble = (label: string, text: string, align: 'left' | 'right', color: string) => {
     ctx.font = `500 34px ${FONT}`;
@@ -331,11 +465,11 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     const h = 40 + lines.length * 48;
     const x = align === 'left' ? 80 : CARD_W - 80 - w;
     ctx.fillStyle = color;
-    ctx.globalAlpha = 0.35;
+    ctx.globalAlpha = skin.bubbleAlpha;
     roundRect(ctx, x, bubbleY, w, h, 22);
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = INK;
+    ctx.fillStyle = skin.bubbleInk;
     ctx.textAlign = 'left';
     ctx.font = `700 26px ${FONT}`;
     ctx.globalAlpha = 0.6;
@@ -347,13 +481,12 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     }
     bubbleY += h + 56;
   };
-  if (data.myNote) bubble('나', data.myNote, 'left', '#9ec3d8');
-  if (data.partnerNote) bubble('짝꿍', data.partnerNote, 'right', '#e8637c');
+  if (data.myNote) bubble('나', data.myNote, 'left', skin.bubbleMe);
+  if (data.partnerNote) bubble('짝꿍', data.partnerNote, 'right', skin.bubblePartner);
 
-  // 질문 + 답
   if (data.question && (data.myAnswer || data.partnerAnswer)) {
     ctx.textAlign = 'center';
-    ctx.fillStyle = INK;
+    ctx.fillStyle = skin.ink;
     ctx.font = `700 36px ${FONT}`;
     ctx.globalAlpha = 0.85;
     for (const [i, line] of wrapText(ctx, `Q. ${data.question}`, CARD_W - 220, 2).entries()) {
@@ -362,7 +495,7 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     ctx.globalAlpha = 1;
     bubbleY += 76;
     ctx.font = `500 32px ${FONT}`;
-    ctx.globalAlpha = 0.72;
+    ctx.globalAlpha = 0.75;
     if (data.myAnswer) {
       for (const [i, line] of wrapText(ctx, `나 · ${data.myAnswer}`, CARD_W - 260, 2).entries()) {
         ctx.fillText(line, CARD_W / 2, bubbleY + i * 44);
@@ -378,77 +511,74 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     ctx.globalAlpha = 1;
   }
 
-  // 글이 길수록 사진 영역을 줄여 카드 밖으로 잘리지 않게 (워터마크 자리 110px 확보)
   const photoTop = Math.max(bubbleY + 20, 780);
   const photoH = Math.min(430, CARD_H - 110 - photoTop);
-  if (photoH >= 200) paintPhotoGrid(ctx, images, photoTop, photoH, data.photoUrls.length);
-  paintWatermark(ctx);
+  if (photoH >= 200) paintPhotoGrid(ctx, images, photoTop, photoH, skin, data.photoUrls.length);
+  paintWatermark(ctx, skin);
 }
 
+// ── 종합(리캡) 카드 ──────────────────────────────────────────────
 export interface RecapCardData {
-  /** 예: "2026년 7월의 우리" / "지금까지의 우리" */
   title: string;
-  /** 큰 숫자 통계 2~3칸 (예: value "12번" label "데이트") */
   stats: { value: string; label: string }[];
   regionNames: string[];
   photoUrls: string[];
-  /** 전체 사진 수 — photoUrls가 미리 추려진 경우 "+N" 배지 계산용 (없으면 photoUrls 기준) */
   photoTotal?: number;
-  /** 하단 한 줄 (예: "대한민국 8/230 지역에 우리 발자국") */
   footer: string | null;
+  theme?: ShareTheme;
 }
 
-/** 종합 카드 — 여러 기록을 한 장으로 (월간 리캡·전체 리캡 공용). 지출은 여기도 제외 */
 export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardData) {
   canvas.width = CARD_W;
   canvas.height = CARD_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('canvas 미지원');
+  const skin = resolveSkin(data.theme);
+  const accent = skin.accentFor('#8cab68');
   const images = await Promise.all(data.photoUrls.slice(0, 4).map(loadImage));
 
-  paintBase(ctx);
-  tape(ctx, CARD_W / 2, 96, 300, 74, -2.5, GREEN);
+  skin.paintBg(ctx);
+  paintHeaderDeco(ctx, skin, accent, -2.5);
 
-  ctx.fillStyle = INK;
+  ctx.fillStyle = skin.ink;
   ctx.textAlign = 'center';
   ctx.font = `700 58px ${FONT}`;
   ctx.fillText(data.title, CARD_W / 2, 220);
 
   const hasPhotos = images.some((i) => i !== null);
 
-  // 통계 칸 — 사진이 없으면 통계가 주인공이라 더 크게, 아래로
   const stats = data.stats.slice(0, 3);
   const statsTop = hasPhotos ? 300 : 420;
   const colW = (CARD_W - 160) / stats.length;
   for (const [i, s] of stats.entries()) {
     const x = 80 + colW * i + colW / 2;
     ctx.font = `700 ${hasPhotos ? 72 : 84}px ${FONT}`;
-    ctx.fillStyle = PINK;
+    ctx.fillStyle = accent;
     ctx.fillText(s.value, x, statsTop + 72);
     ctx.font = `600 30px ${FONT}`;
-    ctx.fillStyle = INK;
-    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = skin.ink;
+    ctx.globalAlpha = 0.65;
     ctx.fillText(s.label, x, statsTop + 128);
     ctx.globalAlpha = 1;
   }
 
   if (hasPhotos) {
-    paintPhotoGrid(ctx, images, 490, 560, data.photoTotal ?? data.photoUrls.length);
+    paintPhotoGrid(ctx, images, 490, 560, skin, data.photoTotal ?? data.photoUrls.length);
   } else {
-    heartDoodle(ctx, CARD_W / 2, 830, 300, PINK);
+    heartDoodle(ctx, CARD_W / 2, 830, 300, accent);
   }
 
   if (data.footer) {
     ctx.font = `500 36px ${FONT}`;
-    ctx.fillStyle = INK;
-    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = skin.ink;
+    ctx.globalAlpha = 0.72;
     ctx.textAlign = 'center';
     ctx.fillText(data.footer, CARD_W / 2, 1130);
     ctx.globalAlpha = 1;
   }
 
-  paintRegionChips(ctx, data.regionNames);
-  paintWatermark(ctx);
+  paintRegionHashtags(ctx, data.regionNames, accent);
+  paintWatermark(ctx, skin);
 }
 
 /** 카드 → PNG Blob */

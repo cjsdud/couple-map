@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { paintRecapCard, type RecapCardData } from '../../shared/lib/shareCard';
+import { paintRecapCard, type RecapCardData, type ShareTheme } from '../../shared/lib/shareCard';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
-import { CardPreview } from '../../shared/ui/ShareCardSheet';
+import { CardPreview, ThemePicker } from '../../shared/ui/ShareCardSheet';
 import { useGrass } from '../today/useToday';
 import { useConquest } from './useConquest';
 import { isMock, useRecords } from './useRecords';
@@ -72,6 +72,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const thisYear = now.getFullYear();
   const thisMonth = now.getMonth() + 1;
   const [scope, setScope] = useState<Scope>('month');
+  const [theme, setTheme] = useState<ShareTheme>('paper');
   const [view, setView] = useState({ year: thisYear, month: thisMonth });
   const isCurrentMonth = view.year === thisYear && view.month === thisMonth;
 
@@ -115,6 +116,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const card: RecapCardData =
     scope === 'month'
       ? {
+          theme,
           title: `${view.year}년 ${view.month}월의 우리`,
           stats: [
             { value: `${monthRecords.length}번`, label: '데이트' },
@@ -127,6 +129,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
           footer: null,
         }
       : {
+          theme,
           title: '지금까지의 우리',
           stats: [
             { value: `${visited.length}번`, label: '데이트' },
@@ -142,7 +145,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const empty = target.length === 0;
   const loading = photosQuery.isFetching || grassQuery.isFetching || namesQuery.isFetching;
   // 범위·월·데이터가 바뀌면 새로 그린다 (CardPreview는 마운트 시 1회만 그리므로 key로 제어)
-  const cardKey = `${scope}-${monthKey}-${photoUrls.length}-${bothDays}-${regionNames.length}`;
+  const cardKey = `${theme}-${scope}-${monthKey}-${photoUrls.length}-${bothDays}-${regionNames.length}`;
 
   const goPrev = () =>
     setView((v) => (v.month === 1 ? { year: v.year - 1, month: 12 } : { year: v.year, month: v.month - 1 }));
@@ -196,6 +199,8 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
             </div>
           )}
         </div>
+
+        {!empty && <ThemePicker theme={theme} onPick={setTheme} />}
 
         {empty ? (
           <div className="space-y-1 py-10 text-center">

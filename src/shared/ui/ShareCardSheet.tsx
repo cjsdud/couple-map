@@ -1,32 +1,69 @@
 import { useEffect, useRef, useState } from 'react';
-import { cardToBlob } from '../lib/shareCard';
+import { cardToBlob, SHARE_THEMES, type ShareTheme } from '../lib/shareCard';
 import BottomSheet from './BottomSheet';
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** 카드를 캔버스에 그리는 페인터 (shareCard.ts) — 열릴 때 1회 실행 */
-  paint: (canvas: HTMLCanvasElement) => Promise<void>;
+  /** 카드를 캔버스에 그리는 페인터 (테마 반영) — 열릴 때·테마 변경 시 실행 */
+  paint: (canvas: HTMLCanvasElement, theme: ShareTheme) => Promise<void>;
   /** 저장 파일명 (예: dohwaji-2026-07-12.png) */
   fileName: string;
 }
 
 /**
- * 공유 카드 시트 — 캔버스로 그린 카드를 미리 보여주고 공유하기·이미지 저장을 제공한다.
- * 상세 시트 안에서 겹쳐 뜨는 레이어 (IA 원칙: 새 화면 금지).
- * BottomSheet가 닫히면 CardPreview가 언마운트되므로 열 때마다 새로 그린다.
+ * 공유 카드 시트 — 테마를 고르고, 미리보기 후 공유하기·이미지 저장.
+ * BottomSheet 안 레이어 (IA 원칙: 새 화면 금지).
  */
 export default function ShareCardSheet({ open, onClose, paint, fileName }: Props) {
+  const [theme, setTheme] = useState<ShareTheme>('paper');
   return (
     <BottomSheet open={open} onClose={onClose} title="공유 카드">
-      <CardPreview paint={paint} fileName={fileName} />
+      <div className="space-y-3 pb-2">
+        <ThemePicker theme={theme} onPick={setTheme} />
+        {/* theme을 key로 — 테마가 바뀌면 새로 그린다 */}
+        <CardPreview key={theme} paint={(canvas) => paint(canvas, theme)} fileName={fileName} />
+      </div>
     </BottomSheet>
   );
 }
 
-/** 미리보기 + 공유/저장 본체 — 다른 시트(종합 카드 등)에서도 재사용. key로 다시 그리기 제어 */
-export function CardPreview({ paint, fileName }: { paint: Props['paint']; fileName: string }) {
-  // 마운트 시점의 페인터로 1회만 그린다 — 부모 리렌더로 인한 다시 그리기 방지
+/** 테마 선택 칩 — 공유/종합 카드 시트 공용 */
+export function ThemePicker({ theme, onPick }: { theme: ShareTheme; onPick: (t: ShareTheme) => void }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-semibold opacity-50">테마</p>
+      <div className="flex gap-2">
+        {SHARE_THEMES.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => onPick(t.key)}
+            className={`flex flex-1 flex-col items-center gap-1 rounded-2xl rounded-tl-md border-2 py-2 text-xs font-semibold active:translate-y-px ${
+              theme === t.key ? 'border-pink bg-pink/10' : 'border-ink/15 bg-white/60'
+            }`}
+          >
+            <span
+              className="h-6 w-6 rounded-full border border-ink/15"
+              style={{ backgroundColor: t.swatch }}
+              aria-hidden
+            />
+            {t.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** 미리보기 + 공유/저장 본체. key로 다시 그리기 제어 (마운트 시 1회 그림) */
+export function CardPreview({
+  paint,
+  fileName,
+}: {
+  paint: (canvas: HTMLCanvasElement) => Promise<void>;
+  fileName: string;
+}) {
   const paintRef = useRef(paint);
   const blobRef = useRef<Blob | null>(null);
   const [status, setStatus] = useState<'painting' | 'ready' | 'error'>('painting');
@@ -108,9 +145,7 @@ export function CardPreview({ paint, fileName }: { paint: Props['paint']; fileNa
           type="button"
           onClick={download}
           className={`flex-1 rounded-2xl py-3 text-sm font-bold active:translate-y-px ${
-            canShare
-              ? 'rounded-br-md border-2 border-ink/15 bg-white/70'
-              : 'rounded-tl-md bg-pink text-white'
+            canShare ? 'rounded-br-md border-2 border-ink/15 bg-white/70' : 'rounded-tl-md bg-pink text-white'
           }`}
         >
           이미지 저장

@@ -241,8 +241,9 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
             open={shareOpen}
             onClose={() => setShareOpen(false)}
             fileName={`dohwaji-${record.date}.png`}
-            paint={(canvas) =>
+            paint={(canvas, theme) =>
               paintRecordCard(canvas, {
+                theme,
                 date: record.date,
                 spotNames: spots.map((s) => s.name),
                 memo: record.memo,

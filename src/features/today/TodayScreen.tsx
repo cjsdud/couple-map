@@ -768,8 +768,9 @@ function DayDetailSheet({
             open={shareOpen}
             onClose={() => setShareOpen(false)}
             fileName={`dohwaji-${date}.png`}
-            paint={(canvas) =>
+            paint={(canvas, theme) =>
               paintDayCard(canvas, {
+                theme,
                 date,
                 myMood: myEntry?.mood ?? null,
                 partnerMood: partnerEntry?.mood ?? null,
