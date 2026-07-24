@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 
 interface BottomSheetProps {
   open: boolean;
@@ -13,19 +14,21 @@ interface BottomSheetProps {
  * 열려 있는 동안 배경(body) 스크롤을 잠가 뒤 화면이 딸려 움직이지 않게 한다.
  */
 export default function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
+  // 스크롤 잠금 — deps는 [open]만 (onClose 재생성으로 인한 재실행 방지). 참조 카운트로 중첩 안전.
+  useEffect(() => {
+    if (!open) return;
+    lockScroll();
+    return unlockScroll;
+  }, [open]);
+
+  // ESC 닫기 — onClose가 바뀌어도 잠금과 분리돼 있어 안전
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    // 배경 스크롤 잠금 — 모달 열린 동안 뒤 화면이 터치로 스크롤되며 겹치는 문제 방지
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   if (!open) return null;

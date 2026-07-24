@@ -18,10 +18,13 @@ interface SigunguGeo {
 
 const VIEW_W = 800;
 const MAX_ZOOM = 16;
-/** 바다 — 수채화 톤 (도화지 감성 유지하면서 육지/바다 대비로 지도답게) */
-const SEA_COLOR = '#e2edf3';
-/** 정복 색칠 — 크레용 초록 (빗금 대신 솔리드로 곱게 채운다) */
+/** 바다 — 부드러운 수채 블루 (데이터 지도 느낌 대신 따뜻한 종이 위 바다) */
+const SEA_COLOR = '#d6e4ea';
+/** 정복 색칠 — 색연필 초록 + 칠한 자국 테두리 */
 const CONQUEST_FILL = '#8cab68';
+const CONQUEST_STROKE = '#6f9450';
+/** 시·군·구 경계선 색 (기본 배율엔 거의 안 보이고 확대할수록 진해진다) */
+const SIGUNGU_LINE = '#6b6357';
 
 /** 위도 36° 기준 등장방형 근사 — 정복 개요 지도용으로 충분, SDK 불필요 (tech-design §3) */
 function useProjectedPaths(geo: SigunguGeo | undefined) {
@@ -119,7 +122,8 @@ function tierOf(count: number): number {
   return Math.min(count, 5);
 }
 
-const TIER_OPACITY = [0, 0.35, 0.5, 0.65, 0.82, 1];
+// 방문 횟수별 색칠 진하기 — 대비를 완만하게(얼룩덜룩함 방지), 그래도 덧칠은 보이게
+const TIER_OPACITY = [0, 0.42, 0.54, 0.66, 0.78, 0.9];
 
 interface ViewBox {
   x: number;
@@ -283,6 +287,9 @@ export default function ConquestMap({
   );
   // 시군구 이름은 2.6배부터 — 행정동 세분화는 어지럽다는 사용자 피드백(2026-07-23)으로 제거
   const showRegionNames = scaleFactor <= 1 / 2.6;
+  // 시군구 경계 그물망은 기본 배율에서 감춤(선거지도 느낌 제거) → 확대할수록 서서히 나타남
+  const detail = Math.max(0, Math.min(1, (1 / scaleFactor - 1.6) / 2.5));
+  const sigunguLineOpacity = detail * 0.24;
   // 라벨은 현재 화면 안의 지역만 — 경계 밖에 걸친 글자 방지
   const viewH = projected?.viewH ?? VIEW_W;
   const vbH = vb.w * (viewH / VIEW_W);
@@ -317,37 +324,57 @@ export default function ConquestMap({
         </defs>
         {/* wobble 필터는 기본 배율에서만 — 확대 시 iOS가 필터 래스터 한계로 지도를 통째로 안 그리는 문제 회피 */}
         <g filter={zoomed ? undefined : 'url(#wobble)'}>
-          {projected.paths.map((p) => {
-            const tier = tierOf(visitCounts[p.code] ?? 0);
-            return (
-              <g key={p.code}>
+          {/* ① 육지 바탕색 — 기본 배율엔 경계선 없이 한 장의 종이처럼 (그물망 제거) */}
+          {projected.paths.map((p) => (
+            <path key={`fill-${p.code}`} d={p.d} fill={paper} />
+          ))}
+          {/* ② 시·군·구 경계 — 확대할수록 서서히 진해지는 옅은 선 */}
+          {sigunguLineOpacity > 0.01 && (
+            <g pointerEvents="none">
+              {projected.paths.map((p) => (
                 <path
+                  key={`line-${p.code}`}
                   d={p.d}
-                  fill={paper}
-                  stroke="#3b3733"
-                  strokeOpacity="0.25"
-                  strokeWidth="1"
+                  fill="none"
+                  stroke={SIGUNGU_LINE}
+                  strokeOpacity={sigunguLineOpacity}
+                  strokeWidth="0.8"
                   vectorEffect="non-scaling-stroke"
                 />
-                {tier > 0 && (
-                  <path d={p.d} fill={CONQUEST_FILL} opacity={TIER_OPACITY[tier]}>
-                    <title>{`${p.name} ×${visitCounts[p.code]}`}</title>
-                  </path>
-                )}
+              ))}
+            </g>
+          )}
+          {/* ③ 정복 색칠 — 색연필 초록 + 칠한 자국 테두리 */}
+          {projected.paths.map((p) => {
+            const tier = tierOf(visitCounts[p.code] ?? 0);
+            if (tier === 0) return null;
+            return (
+              <g key={`fill2-${p.code}`}>
+                <path d={p.d} fill={CONQUEST_FILL} opacity={TIER_OPACITY[tier]}>
+                  <title>{`${p.name} ×${visitCounts[p.code]}`}</title>
+                </path>
+                <path
+                  d={p.d}
+                  fill="none"
+                  stroke={CONQUEST_STROKE}
+                  strokeOpacity="0.55"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
               </g>
             );
           })}
-        </g>
-        {/* 시·도 경계 — 한 겹으로 지도 인상 강화 */}
-        <g>
+          {/* ④ 시·도 경계 + 해안선 — 부드러운 잉크선 한 겹으로 '손으로 그린 지도' 인상 */}
           {sidoPaths.map((d, i) => (
             <path
-              key={i}
+              key={`sido-${i}`}
               d={d}
               fill="none"
-              stroke="#3b3733"
-              strokeOpacity="0.3"
-              strokeWidth="1.05"
+              stroke="#4a453d"
+              strokeOpacity="0.38"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
             />
           ))}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 
 interface PhotoViewerProps {
   /** 보여줄 이미지 URL — null이면 닫힘 */
@@ -26,18 +27,18 @@ function Viewer({ url, onClose }: { url: string; onClose: () => void }) {
   const pinchDist = useRef(0);
   const lastTap = useRef(0);
 
+  // 뷰어 열린 동안 배경 스크롤 잠금 (참조 카운트 — 시트 위에 겹쳐도 안전)
+  useEffect(() => {
+    lockScroll();
+    return unlockScroll;
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    // 뷰어 열린 동안 배경 스크롤 잠금 — 뒤 화면이 딸려 움직이지 않게
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {

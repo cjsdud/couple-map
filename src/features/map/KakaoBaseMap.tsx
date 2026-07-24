@@ -12,7 +12,9 @@ interface SigunguGeoFeature {
 }
 
 /** 방문 횟수 → 정복 오버레이 투명도 (도화지 지도의 덧칠 단계와 동일 감각) */
-const TIER_FILL = [0, 0.14, 0.2, 0.26, 0.33, 0.4];
+const TIER_FILL = [0, 0.16, 0.22, 0.28, 0.34, 0.4];
+/** 도화지 지도와 같은 색연필 초록 테두리 — 실지도 위에서도 '선 안에 색칠한' 느낌 */
+const CONQUEST_STROKE = '#6f9450';
 
 /**
  * 실지도 모드 — 카카오맵 위에 정복 색칠(반투명 폴리곤)·스팟 핀·코스 점선을 얹는다.
@@ -84,9 +86,9 @@ export default function KakaoBaseMap({
           new window.kakao.maps.Polygon({
             map,
             path: poly.map((ring) => ring.map(([lng, lat]) => new window.kakao.maps.LatLng(lat, lng))),
-            strokeWeight: 1.5,
-            strokeColor: '#8cab68',
-            strokeOpacity: 0.7,
+            strokeWeight: 2,
+            strokeColor: CONQUEST_STROKE,
+            strokeOpacity: 0.85,
             fillColor: '#8cab68',
             fillOpacity: TIER_FILL[tier],
           }),
