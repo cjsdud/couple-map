@@ -29,6 +29,11 @@ export const SHARE_THEMES: { key: ShareTheme; label: string; swatch: string }[] 
 ];
 
 interface PhotoTint {
+  /**
+   * separable 모드만 허용 (soft-light 등). 'saturation' 같은 non-separable 블렌드는
+   * 브라우저(특히 WebKit·인앱 WebView)마다 동작이 갈려 사진이 아예 안 보일 수 있다 —
+   * 채도 낮추기는 photoDesaturate(픽셀 연산)로만 한다.
+   */
   mode: GlobalCompositeOperation;
   color: string;
   alpha: number;
@@ -42,6 +47,8 @@ interface Skin {
   body: string;
   headerDeco: 'tape' | 'rule'; // 제목 위 장식 (마스킹테이프 / 짧은 선)
   frame: { mat: string; pad: number; radius: number; shadow: number; border: string | null };
+  /** 사진 채도 낮추기 0(원본)~1(흑백) — 모든 브라우저에서 동일하게 동작하는 픽셀 연산 */
+  photoDesaturate?: number;
   /** 사진 위 색보정 (테마 톤으로 통일) */
   photoTint: PhotoTint[];
   /** 필름/종이 그레인 세기 (0 = 없음) */
@@ -116,7 +123,8 @@ const SKINS: Record<ShareTheme, Skin> = {
     body: SHARE_FONT.serif,
     headerDeco: 'rule',
     frame: { mat: '#ffffff', pad: 14, radius: 4, shadow: 0.14, border: 'rgba(0,0,0,0.08)' },
-    photoTint: [{ mode: 'saturation', color: '#808080', alpha: 1 }],
+    photoDesaturate: 1,
+    photoTint: [],
     grain: 0.14,
     bubbleMe: '#111111',
     bubblePartner: '#111111',
@@ -166,10 +174,8 @@ const SKINS: Record<ShareTheme, Skin> = {
     body: SHARE_FONT.hand,
     headerDeco: 'tape',
     frame: { mat: '#f4ead2', pad: 18, radius: 8, shadow: 0.22, border: 'rgba(74,59,42,0.28)' },
-    photoTint: [
-      { mode: 'saturation', color: '#8a8172', alpha: 0.55 },
-      { mode: 'soft-light', color: '#8a5a2a', alpha: 0.5 },
-    ],
+    photoDesaturate: 0.55,
+    photoTint: [{ mode: 'soft-light', color: '#8a5a2a', alpha: 0.5 }],
     grain: 0.4,
     bubbleMe: '#7d8a63',
     bubblePartner: '#a8613f',
@@ -275,6 +281,37 @@ function paintHeaderDeco(ctx: CanvasRenderingContext2D, skin: Skin, color: strin
   }
 }
 
+/**
+ * 사진 채도 낮추기 — 픽셀 루프(휘도 혼합)라 어느 브라우저에서든 결과가 같다.
+ * 실패(컨텍스트 미지원 등) 시 null — 호출부가 원본으로 폴백해 사진이 빠지는 일은 없다.
+ */
+function desaturated(img: ImageBitmap | HTMLImageElement, amount: number): HTMLCanvasElement | null {
+  const iw = img.width;
+  const ih = img.height;
+  if (!iw || !ih) return null;
+  const scale = Math.min(1, 900 / Math.max(iw, ih)); // 카드 안 사진은 800px 이하 — 원본이 커도 이만큼이면 충분
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(iw * scale));
+  c.height = Math.max(1, Math.round(ih * scale));
+  const x = c.getContext('2d');
+  if (!x) return null;
+  try {
+    x.drawImage(img, 0, 0, c.width, c.height);
+    const data = x.getImageData(0, 0, c.width, c.height);
+    const p = data.data;
+    for (let i = 0; i < p.length; i += 4) {
+      const g = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
+      p[i] += (g - p[i]) * amount;
+      p[i + 1] += (g - p[i + 1]) * amount;
+      p[i + 2] += (g - p[i + 2]) * amount;
+    }
+    x.putImageData(data, 0, 0);
+  } catch {
+    return null;
+  }
+  return c;
+}
+
 /** 사진 프레임 (테마별 매트·테두리·그림자) — cover-fit */
 function photoFrame(
   ctx: CanvasRenderingContext2D,
@@ -305,8 +342,11 @@ function photoFrame(
     roundRect(ctx, -w / 2, -h / 2, w, h, radius);
     ctx.stroke();
   }
-  const iw = 'width' in img ? img.width : 0;
-  const ih = 'height' in img ? img.height : 0;
+  // 채도 보정본 준비 (실패하면 원본 그대로 — 사진이 빠지는 것보다 낫다)
+  const source: ImageBitmap | HTMLImageElement | HTMLCanvasElement =
+    (skin.photoDesaturate ? desaturated(img, skin.photoDesaturate) : null) ?? img;
+  const iw = source.width;
+  const ih = source.height;
   const dw = w - pad * 2;
   const dh = h - pad * 2;
   const scale = Math.max(dw / iw, dh / ih);
@@ -315,7 +355,7 @@ function photoFrame(
   ctx.save();
   roundRect(ctx, -w / 2 + pad, -h / 2 + pad, dw, dh, Math.max(2, radius - 4));
   ctx.clip();
-  ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, -w / 2 + pad, -h / 2 + pad, dw, dh);
+  ctx.drawImage(source, (iw - sw) / 2, (ih - sh) / 2, sw, sh, -w / 2 + pad, -h / 2 + pad, dw, dh);
   // 테마 색보정 — 클립 안에서 사진 위에만 합성 (전체 톤 통일)
   for (const t of skin.photoTint) {
     ctx.globalCompositeOperation = t.mode;
