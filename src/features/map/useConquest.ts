@@ -16,9 +16,14 @@ export function useConquest() {
   const { data } = useQuery({
     queryKey: ['conquest'],
     queryFn: async (): Promise<Record<string, number>> => {
-      // ?mock=1 — 디자인 확인용 데모 데이터 (Supabase 연결과 무관하게 동작)
+      // ?mock=1 — 디자인 확인용 데모 데이터. useRecords의 MOCK_RECORDS(visited 스팟 수)와 동기 유지
       if (new URLSearchParams(window.location.search).has('mock')) {
-        return { '11110': 1, '11680': 2, '41110': 3, '41590': 1, '51110': 5, '50110': 2, '26350': 1, '52110': 4 };
+        return {
+          '11440': 3, '11200': 2, '11110': 2, '11680': 2, '11560': 1, // 서울 5구
+          '51110': 1, '51150': 1, '41820': 1, '28155': 1, // 춘천·강릉·가평·영종
+          '26350': 2, '26500': 1, '30140': 1, '47130': 2, // 부산 2구·대전·경주
+          '50110': 2, '50130': 2, // 제주·서귀포
+        };
       }
       if (!supabase) return {};
       const { data: rows, error } = await supabase

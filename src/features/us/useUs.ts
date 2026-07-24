@@ -56,7 +56,11 @@ export function useAnniversaries(coupleId: string | undefined) {
     queryKey: ['anniversaries', coupleId],
     queryFn: async (): Promise<Anniversary[]> => {
       if (isMockMode())
-        return [{ id: 'mock-a1', title: '처음 만난 날', date: '2026-01-10', kind: 'custom' }];
+        return [
+          { id: 'mock-a1', title: '처음 만난 날', date: '2026-01-10', kind: 'custom' },
+          { id: 'mock-a2', title: '첫 여행 (부산)', date: '2026-05-05', kind: 'custom' },
+          { id: 'mock-a3', title: '짝꿍 생일', date: '2026-09-03', kind: 'custom' },
+        ];
       if (!supabase || !coupleId) return [];
       const { data, error } = await supabase
         .from('anniversaries')
@@ -120,11 +124,15 @@ export function useMonthlyExpenses(year: number, month: number) {
     queryKey: ['monthly-expenses', year, month],
     queryFn: async (): Promise<MonthlyExpenseRow[]> => {
       if (new URLSearchParams(window.location.search).has('mock')) {
+        // useRecords MOCK_RECORDS의 7월 지출(mock-1·4·5·9)과 동기 유지 (2026-07-24)
         return [
-          { amount: 34000, category: 'meal', paid_by: 'a', record_id: 'r1' },
-          { amount: 11000, category: 'cafe', paid_by: 'b', record_id: 'r1' },
-          { amount: 28000, category: 'play', paid_by: 'a', record_id: 'r2' },
-          { amount: 15000, category: 'meal', paid_by: 'b', record_id: 'r3' },
+          { amount: 31000, category: 'meal', paid_by: 'b', record_id: 'mock-9' },
+          { amount: 42000, category: 'meal', paid_by: 'b', record_id: 'mock-4' },
+          { amount: 18000, category: 'cafe', paid_by: 'a', record_id: 'mock-4' },
+          { amount: 34000, category: 'meal', paid_by: 'a', record_id: 'mock-1' },
+          { amount: 11000, category: 'cafe', paid_by: 'b', record_id: 'mock-1' },
+          { amount: 6000, category: 'play', paid_by: 'a', record_id: 'mock-5' },
+          { amount: 15000, category: 'cafe', paid_by: 'a', record_id: 'mock-5' },
         ];
       }
       if (!supabase) return [];

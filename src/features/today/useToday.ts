@@ -307,9 +307,16 @@ export function useDailyTimeline(coupleId: string | undefined, entryDate: string
     queryKey: ['daily-timeline', coupleId, entryDate],
     queryFn: async (): Promise<DailyDaySummary[]> => {
       if (isMock()) {
+        // 검증용 확충 (2026-07-24) — 사진만 있는 날·기분만 있는 날 등 조합을 골고루
         return [
-          { date: '2026-07-19', photoCount: 3, moods: ['🥰', '😊'], answeredCount: 2, noteCount: 2 },
+          { date: '2026-07-23', photoCount: 4, moods: ['😊', '🥰'], answeredCount: 2, noteCount: 2 },
+          { date: '2026-07-22', photoCount: 0, moods: ['😴'], answeredCount: 1, noteCount: 1 },
+          { date: '2026-07-20', photoCount: 2, moods: ['🥰', '😆'], answeredCount: 2, noteCount: 1 },
+          { date: '2026-07-18', photoCount: 5, moods: ['😊'], answeredCount: 1, noteCount: 2 },
+          { date: '2026-07-15', photoCount: 1, moods: [], answeredCount: 0, noteCount: 1 },
           { date: '2026-07-13', photoCount: 1, moods: ['😴'], answeredCount: 1, noteCount: 1 },
+          { date: '2026-07-10', photoCount: 3, moods: ['😆', '😊'], answeredCount: 2, noteCount: 2 },
+          { date: '2026-07-06', photoCount: 0, moods: ['🥲'], answeredCount: 1, noteCount: 0 },
         ];
       }
       if (!supabase || !coupleId) return [];
@@ -345,10 +352,31 @@ export function useDailyTimeline(coupleId: string | undefined, entryDate: string
 
 const MOCK_GRASS_FILLED = [1, 2, 3, 5, 6, 8, 11, 12, 13, 14, 15, 17, 18];
 const MOCK_GRASS_HALF = [4, 9, 16];
+/** 지난달 패턴 — 월 이동 데모에서도 잔디가 이어져 보이게 (2026-07-24 검증용 확충) */
+const MOCK_PREV_FILLED = [2, 3, 5, 7, 8, 10, 12, 14, 16, 19, 20, 22, 25, 26, 28];
+const MOCK_PREV_HALF = [6, 13, 21];
 
-/** 목 잔디: 현재 월만 채워 둔다 (월 이동 데모에서 다른 달은 빈 그리드) */
+/** 현재 월의 직전 (년, 월) — 1월이면 작년 12월 */
+function prevYearMonth(year: number, month: number): [number, number] {
+  return month === 1 ? [year - 1, 12] : [year, month - 1];
+}
+
+/** 목 잔디: 현재 월 + 지난달을 채워 둔다 (그 이전 달은 빈 그리드) */
 function mockGrassMonth(year: number, month: number): GrassDay[] {
   const now = new Date();
+  const [py, pm] = prevYearMonth(now.getFullYear(), now.getMonth() + 1);
+  if (year === py && month === pm) {
+    return [
+      ...MOCK_PREV_FILLED.map((d) => ({
+        date: toDateString(new Date(year, month - 1, d)),
+        level: 'both' as const,
+      })),
+      ...MOCK_PREV_HALF.map((d) => ({
+        date: toDateString(new Date(year, month - 1, d)),
+        level: 'one' as const,
+      })),
+    ];
+  }
   if (year !== now.getFullYear() || month !== now.getMonth() + 1) return [];
   const days: GrassDay[] = [
     ...MOCK_GRASS_FILLED.map((d) => ({
@@ -461,7 +489,25 @@ export function mockTodayPair(date: string): { myEntry: DailyEntry; partnerEntry
   };
 }
 
-/** 목 상세: 잔디 목데이터와 같은 날짜만 채워서 시트 데모가 이어지게 */
+/** 한 명만 참여한 날: 짝꿍만 답해서 내 쪽에선 잠겨 있는 상태를 보여준다 */
+function mockPartnerOnly(date: string): { myEntry: null; partnerEntry: DailyEntry } {
+  return {
+    myEntry: null,
+    partnerEntry: {
+      couple_id: 'mock-couple',
+      entry_date: date,
+      question_id: 1,
+      id: 'mock-partner',
+      user_id: 'mock-partner',
+      mood: '😴',
+      answer: null,
+      has_answer: true,
+      note: '조금 피곤했던 하루',
+    },
+  };
+}
+
+/** 목 상세: 잔디 목데이터와 같은 날짜(현재 월 + 지난달)만 채워서 시트 데모가 이어지게 */
 function mockDayDetail(date: string): { myEntry: DailyEntry | null; partnerEntry: DailyEntry | null } {
   const now = new Date();
   const [y, m, d] = date.split('-').map(Number);
@@ -470,22 +516,11 @@ function mockDayDetail(date: string): { myEntry: DailyEntry | null; partnerEntry
   if (currentMonth && !MOCK_GRASS_HALF.includes(d) && (MOCK_GRASS_FILLED.includes(d) || d === today || d === today - 1)) {
     return mockTodayPair(date);
   }
-  if (currentMonth && MOCK_GRASS_HALF.includes(d)) {
-    // 한 명만 참여한 날: 짝꿍만 답해서 내 쪽에선 잠겨 있는 상태를 보여준다
-    return {
-      myEntry: null,
-      partnerEntry: {
-        couple_id: 'mock-couple',
-        entry_date: date,
-        question_id: 1,
-        id: 'mock-partner',
-        user_id: 'mock-partner',
-        mood: '😴',
-        answer: null,
-        has_answer: true,
-        note: '조금 피곤했던 하루',
-      },
-    };
+  if (currentMonth && MOCK_GRASS_HALF.includes(d)) return mockPartnerOnly(date);
+  const [py, pm] = prevYearMonth(now.getFullYear(), now.getMonth() + 1);
+  if (y === py && m === pm) {
+    if (MOCK_PREV_FILLED.includes(d)) return mockTodayPair(date);
+    if (MOCK_PREV_HALF.includes(d)) return mockPartnerOnly(date);
   }
   return { myEntry: null, partnerEntry: null };
 }

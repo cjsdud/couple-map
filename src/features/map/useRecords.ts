@@ -46,7 +46,57 @@ export interface RecordRow {
   expenses: ExpenseRow[];
 }
 
+/**
+ * ?mock=1 데모 데이터 — 검증용으로 실제 반년치 데이트를 흉내 낸다 (2026-07-24 확충).
+ * 포인트: ①시군구 15곳 색칠(도화지·실지도) ②소금집 델리 재방문 → ×2 클러스터 뱃지
+ * ③1박2일(부산)·2박3일(제주) 여행 ④커스텀 지출 카테고리('숙소') ⑤가고 싶어요 핀 3개.
+ * sigungu_code는 public/geo/sigungu.json의 코드 기준 (대전 중구=30140, 여수=12130).
+ */
 const MOCK_RECORDS: RecordRow[] = [
+  {
+    id: 'mock-15',
+    date: '2026-08-15',
+    memo: '여수 밤바다 들으면서 걷기로 약속',
+    status: 'planned',
+    spots: [
+      { id: 'm15s1', seq: 1, name: '여수 낭만포차거리', lat: 34.7407, lng: 127.7382, sigungu_code: '12130', kakao_place_id: 'p-yeosu' },
+    ],
+    expenses: [],
+  },
+  {
+    id: 'mock-9',
+    date: '2026-07-20',
+    memo: '결국 또 왔다 소금집… 우리 단골 확정',
+    status: 'visited',
+    spots: [
+      { id: 'm9s1', seq: 1, name: '소금집 델리', lat: 37.5561, lng: 126.9042, sigungu_code: '11440', kakao_place_id: 'p-deli' },
+    ],
+    expenses: [{ id: 'm9e1', category: 'meal', amount: 31000, paid_by: null }],
+  },
+  {
+    id: 'mock-3',
+    date: '2026-07-19',
+    memo: null,
+    status: 'planned',
+    spots: [
+      { id: 'm3s1', seq: 1, name: '전주 한옥마을', lat: 35.8143, lng: 127.1522, sigungu_code: '52110', kakao_place_id: 'p-hanok' },
+    ],
+    expenses: [],
+  },
+  {
+    id: 'mock-4',
+    date: '2026-07-18',
+    memo: '성수 카페 웨이팅 40분… 그래도 서울숲 산책으로 만회',
+    status: 'visited',
+    spots: [
+      { id: 'm4s1', seq: 1, name: '성수동 카페거리', lat: 37.5446, lng: 127.0559, sigungu_code: '11200', kakao_place_id: 'p-seongsu' },
+      { id: 'm4s2', seq: 2, name: '서울숲', lat: 37.5444, lng: 127.0374, sigungu_code: '11200', kakao_place_id: 'p-forest' },
+    ],
+    expenses: [
+      { id: 'm4e1', category: 'meal', amount: 42000, paid_by: null },
+      { id: 'm4e2', category: 'cafe', amount: 18000, paid_by: null },
+    ],
+  },
   {
     id: 'mock-1',
     date: '2026-07-12',
@@ -62,6 +112,20 @@ const MOCK_RECORDS: RecordRow[] = [
     ],
   },
   {
+    id: 'mock-5',
+    date: '2026-07-05',
+    memo: '한복 입고 경복궁! 사진 200장 찍음',
+    status: 'visited',
+    spots: [
+      { id: 'm5s1', seq: 1, name: '경복궁', lat: 37.5796, lng: 126.977, sigungu_code: '11110', kakao_place_id: 'p-palace' },
+      { id: 'm5s2', seq: 2, name: '삼청동 카페골목', lat: 37.5826, lng: 126.9816, sigungu_code: '11110', kakao_place_id: 'p-samcheong' },
+    ],
+    expenses: [
+      { id: 'm5e1', category: 'play', amount: 6000, paid_by: null },
+      { id: 'm5e2', category: 'cafe', amount: 15000, paid_by: null },
+    ],
+  },
+  {
     id: 'mock-2',
     date: '2026-06-28',
     memo: '춘천 당일치기! 닭갈비 정복',
@@ -72,14 +136,143 @@ const MOCK_RECORDS: RecordRow[] = [
     expenses: [{ id: 'm2e1', category: 'play', amount: 5000, paid_by: null }],
   },
   {
-    id: 'mock-3',
-    date: '2026-07-19',
-    memo: null,
-    status: 'planned',
+    id: 'mock-6',
+    date: '2026-06-14',
+    memo: '비 오는 날엔 실내 데이트 — 별마당에서 책 고르다 두 시간',
+    status: 'visited',
     spots: [
-      { id: 'm3s1', seq: 1, name: '전주 한옥마을', lat: 35.8143, lng: 127.1522, sigungu_code: '52110', kakao_place_id: 'p-hanok' },
+      { id: 'm6s1', seq: 1, name: '별마당도서관', lat: 37.5101, lng: 127.0605, sigungu_code: '11680', kakao_place_id: 'p-starfield' },
+      { id: 'm6s2', seq: 2, name: '봉은사', lat: 37.5148, lng: 127.0577, sigungu_code: '11680', kakao_place_id: 'p-bongeunsa' },
     ],
-    expenses: [],
+    expenses: [
+      { id: 'm6e1', category: 'meal', amount: 38000, paid_by: null },
+      { id: 'm6e2', category: 'move', amount: 8000, paid_by: null },
+    ],
+  },
+  {
+    id: 'mock-10',
+    date: '2026-05-24',
+    memo: '가평 쁘띠프랑스 — 어린왕자 굿즈 참기 실패',
+    status: 'visited',
+    spots: [
+      { id: 'm10s1', seq: 1, name: '쁘띠프랑스', lat: 37.7169, lng: 127.4907, sigungu_code: '41820', kakao_place_id: 'p-petite' },
+    ],
+    expenses: [
+      { id: 'm10e1', category: 'play', amount: 24000, paid_by: null },
+      { id: 'm10e2', category: 'gift', amount: 18000, paid_by: null },
+    ],
+  },
+  {
+    id: 'mock-8',
+    date: '2026-05-06',
+    memo: '둘째 날은 광안리 — 대교 야경 보면서 회 먹기 성공',
+    status: 'visited',
+    spots: [
+      { id: 'm8s1', seq: 1, name: '광안리해수욕장', lat: 35.1532, lng: 129.1188, sigungu_code: '26500', kakao_place_id: 'p-gwangan' },
+    ],
+    expenses: [{ id: 'm8e1', category: 'meal', amount: 61000, paid_by: null }],
+  },
+  {
+    id: 'mock-7',
+    date: '2026-05-05',
+    memo: '첫 부산 여행 1일차! 해운대 → 더베이 불꽃 마무리',
+    status: 'visited',
+    spots: [
+      { id: 'm7s1', seq: 1, name: '해운대해수욕장', lat: 35.1587, lng: 129.1604, sigungu_code: '26350', kakao_place_id: 'p-haeundae' },
+      { id: 'm7s2', seq: 2, name: '더베이101', lat: 35.1568, lng: 129.1522, sigungu_code: '26350', kakao_place_id: 'p-thebay' },
+    ],
+    expenses: [
+      { id: 'm7e1', category: 'meal', amount: 52000, paid_by: null },
+      { id: 'm7e2', category: '숙소', amount: 89000, paid_by: null },
+    ],
+  },
+  {
+    id: 'mock-11',
+    date: '2026-04-11',
+    memo: '영종도 드라이브 — 마시안해변 노을이 미쳤다',
+    status: 'visited',
+    spots: [
+      { id: 'm11s1', seq: 1, name: '마시안해변', lat: 37.4423, lng: 126.3735, sigungu_code: '28155', kakao_place_id: 'p-masian' },
+    ],
+    expenses: [
+      { id: 'm11e1', category: 'cafe', amount: 21000, paid_by: null },
+      { id: 'm11e2', category: 'move', amount: 12000, paid_by: null },
+    ],
+  },
+  {
+    id: 'mock-12',
+    date: '2026-04-04',
+    memo: '여의도 벚꽃 — 사람 반 꽃 반이었지만 그래도 예뻤어',
+    status: 'visited',
+    spots: [
+      { id: 'm12s1', seq: 1, name: '여의도한강공원', lat: 37.5285, lng: 126.9327, sigungu_code: '11560', kakao_place_id: 'p-yeouido' },
+    ],
+    expenses: [{ id: 'm12e1', category: 'move', amount: 5600, paid_by: null }],
+  },
+  {
+    id: 'mock-13',
+    date: '2026-03-21',
+    memo: '성심당 원정 — 튀소 4봉지 사서 기차에서 다 먹음',
+    status: 'visited',
+    spots: [
+      { id: 'm13s1', seq: 1, name: '성심당 본점', lat: 36.3276, lng: 127.4273, sigungu_code: '30140', kakao_place_id: 'p-sungsimdang' },
+    ],
+    expenses: [
+      { id: 'm13e1', category: 'meal', amount: 24000, paid_by: null },
+      { id: 'm13e2', category: 'move', amount: 47000, paid_by: null },
+    ],
+  },
+  {
+    id: 'mock-14',
+    date: '2026-03-01',
+    memo: '경주 황리단길 — 한옥 카페에서 십원빵',
+    status: 'visited',
+    spots: [
+      { id: 'm14s1', seq: 1, name: '황리단길', lat: 35.8375, lng: 129.2098, sigungu_code: '47130', kakao_place_id: 'p-hwangridan' },
+      { id: 'm14s2', seq: 2, name: '대릉원', lat: 35.8397, lng: 129.2117, sigungu_code: '47130', kakao_place_id: 'p-daereungwon' },
+    ],
+    expenses: [
+      { id: 'm14e1', category: 'cafe', amount: 16000, paid_by: null },
+      { id: 'm14e2', category: 'play', amount: 6000, paid_by: null },
+    ],
+  },
+  {
+    id: 'mock-17',
+    date: '2026-02-15',
+    memo: '제주 2일차 — 성산일출봉 올라가서 소원 빌었다',
+    status: 'visited',
+    spots: [
+      { id: 'm17s1', seq: 1, name: '성산일출봉', lat: 33.4587, lng: 126.9425, sigungu_code: '50130', kakao_place_id: 'p-seongsan' },
+      { id: 'm17s2', seq: 2, name: '섭지코지', lat: 33.424, lng: 126.9294, sigungu_code: '50130', kakao_place_id: 'p-seopjikoji' },
+    ],
+    expenses: [
+      { id: 'm17e1', category: 'play', amount: 10000, paid_by: null },
+      { id: 'm17e2', category: 'cafe', amount: 14000, paid_by: null },
+    ],
+  },
+  {
+    id: 'mock-16',
+    date: '2026-02-14',
+    memo: '발렌타인에 제주라니! 동문시장 야시장 털기',
+    status: 'visited',
+    spots: [
+      { id: 'm16s1', seq: 1, name: '동문시장', lat: 33.5121, lng: 126.5279, sigungu_code: '50110', kakao_place_id: 'p-dongmun' },
+      { id: 'm16s2', seq: 2, name: '용두암', lat: 33.5163, lng: 126.5119, sigungu_code: '50110', kakao_place_id: 'p-yongduam' },
+    ],
+    expenses: [
+      { id: 'm16e1', category: 'meal', amount: 28000, paid_by: null },
+      { id: 'm16e2', category: 'move', amount: 92000, paid_by: null },
+    ],
+  },
+  {
+    id: 'mock-18',
+    date: '2026-01-17',
+    memo: '겨울 바다는 강릉이지 — 안목해변 커피거리',
+    status: 'visited',
+    spots: [
+      { id: 'm18s1', seq: 1, name: '안목해변 커피거리', lat: 37.7724, lng: 128.9473, sigungu_code: '51150', kakao_place_id: 'p-anmok' },
+    ],
+    expenses: [{ id: 'm18e1', category: 'cafe', amount: 13000, paid_by: null }],
   },
 ];
 
