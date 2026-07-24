@@ -57,9 +57,12 @@ export default function LoginScreen() {
         )}
       </div>
 
-      <p className="pb-2 text-center text-xs opacity-45">
-        앱인토스에서는 토스 로그인으로 이용하게 돼요
-      </p>
+      <div className="space-y-1 pb-2 text-center text-xs opacity-45">
+        <p>앱인토스에서는 토스 로그인으로 이용하게 돼요</p>
+        <a href="/privacy.html" className="underline underline-offset-2">
+          개인정보 처리방침
+        </a>
+      </div>
     </main>
   );
 }

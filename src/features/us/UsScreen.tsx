@@ -369,6 +369,12 @@ function SettingsCard({
         </button>
       )}
       {!supabase && <p className="text-xs opacity-50">데모 모드예요 — 서버와 연결되면 바꿀 수 있어요</p>}
+      <a
+        href="/privacy.html"
+        className="block text-center text-xs opacity-30 underline underline-offset-2"
+      >
+        개인정보 처리방침
+      </a>
     </section>
   );
 }
