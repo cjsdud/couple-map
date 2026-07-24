@@ -75,6 +75,7 @@ export default function RecordSheet({ open, onClose, coupleId, initial, editReco
           .slice()
           .sort((a, b) => a.seq - b.seq)
           .map((s) => ({
+            id: s.id, // 유지 스팟은 diff 업데이트 — 기존 사진의 스팟 태그 보존
             name: s.name,
             lat: s.lat,
             lng: s.lng,

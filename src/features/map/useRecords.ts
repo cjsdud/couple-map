@@ -119,6 +119,8 @@ export function placeVisitCounts(records: RecordRow[]): Record<string, number> {
 }
 
 export interface SpotDraft {
+  /** 수정 모드에서 기존 스팟이면 DB id — diff 업데이트로 사진 태그를 보존한다 */
+  id?: string | null;
   name: string;
   lat: number | null;
   lng: number | null;
@@ -236,7 +238,7 @@ function mockUpdatedRow(prev: RecordRow, draft: RecordUpdateDraft): RecordRow {
     memo: draft.memo.trim() || null,
     status: draft.status,
     spots: draft.spots.map((s, i) => ({
-      id: `${draft.recordId}-s${i + 1}`,
+      id: s.id ?? `${draft.recordId}-s${i + 1}`,
       seq: i + 1,
       name: s.name,
       lat: s.lat,
@@ -254,10 +256,9 @@ function mockUpdatedRow(prev: RecordRow, draft: RecordUpdateDraft): RecordRow {
 }
 
 /**
- * 기록 수정 (명세 §3.1): 기록 필드(date·memo·status) update + 스팟·지출은 delete 후 재insert.
+ * 기록 수정 (명세 §3.1): 기록 필드(date·memo·status) update + 스팟은 diff 업데이트 + 지출은 재insert.
  * RLS의 records_all/spots_all/expenses_all `for all` 정책이 update·delete·insert를 모두 커버한다.
- * ⚠️ 스팟 재insert 시 record_photos.spot_id(on delete set null)가 풀려
- *    기존 사진의 스팟 태그는 사라질 수 있다 — v1 수용 (후속: 스팟 diff 업데이트).
+ * 스팟 diff: 유지 스팟은 id로 update(기존 사진의 spot_id 태그 보존), 빠진 것만 delete, 새것만 insert.
  */
 export function useUpdateRecord(coupleId: string | undefined) {
   const queryClient = useQueryClient();
@@ -276,27 +277,56 @@ export function useUpdateRecord(coupleId: string | undefined) {
         .eq('id', draft.recordId);
       if (error) throw error;
 
-      const { error: delSpotsError } = await supabase
+      // 스팟 diff — 전삭제·재삽입은 record_photos.spot_id(on delete set null)를 풀어
+      // 기존 사진의 스팟 태그가 사라지므로, 유지 스팟은 id로 update한다.
+      const keptIds = draft.spots.map((s) => s.id).filter((v): v is string => Boolean(v));
+      const { data: existingSpots, error: exSpotsError } = await supabase
         .from('spots')
-        .delete()
+        .select('id')
         .eq('record_id', draft.recordId);
-      if (delSpotsError) throw delSpotsError;
-      const { data: spotRows, error: spotsError } = await supabase
-        .from('spots')
-        .insert(
-          draft.spots.map((s, i) => ({
-            record_id: draft.recordId,
-            seq: i + 1,
-            name: s.name,
-            lat: s.lat,
-            lng: s.lng,
-            sigungu_code: s.sigunguCode,
-            kakao_place_id: s.kakaoPlaceId,
-          })),
-        )
-        .select('id, seq');
-      if (spotsError) throw spotsError;
-      const spotIdBySeq = new Map((spotRows ?? []).map((s) => [s.seq as number, s.id as string]));
+      if (exSpotsError) throw exSpotsError;
+      const dropIds = (existingSpots ?? [])
+        .map((r) => r.id as string)
+        .filter((id) => !keptIds.includes(id));
+      if (dropIds.length > 0) {
+        const { error: delSpotsError } = await supabase.from('spots').delete().in('id', dropIds);
+        if (delSpotsError) throw delSpotsError;
+      }
+      // unique(record_id, seq) 임시 충돌 방지 — 유지 스팟을 높은 seq로 비켜 놓고(1-pass)
+      // 정식 seq를 부여한다(2-pass). 신규 스팟은 2-pass에서 제자리 insert.
+      for (const [i, s] of draft.spots.entries()) {
+        if (!s.id) continue;
+        const { error: parkError } = await supabase
+          .from('spots')
+          .update({ seq: 100 + i })
+          .eq('id', s.id);
+        if (parkError) throw parkError;
+      }
+      const spotIdBySeq = new Map<number, string>();
+      for (const [i, s] of draft.spots.entries()) {
+        const seq = i + 1;
+        const fields = {
+          seq,
+          name: s.name,
+          lat: s.lat,
+          lng: s.lng,
+          sigungu_code: s.sigunguCode,
+          kakao_place_id: s.kakaoPlaceId,
+        };
+        if (s.id) {
+          const { error: upError } = await supabase.from('spots').update(fields).eq('id', s.id);
+          if (upError) throw upError;
+          spotIdBySeq.set(seq, s.id);
+        } else {
+          const { data: inserted, error: insError } = await supabase
+            .from('spots')
+            .insert({ record_id: draft.recordId, ...fields })
+            .select('id')
+            .single();
+          if (insError) throw insError;
+          spotIdBySeq.set(seq, inserted.id as string);
+        }
+      }
 
       const { error: delExpensesError } = await supabase
         .from('expenses')
