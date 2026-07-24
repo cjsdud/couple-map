@@ -11,10 +11,13 @@ type Item =
 export default function Timeline({
   filter,
   onSelectRecord,
+  onSelectDay,
 }: {
   filter: Filter;
   /** 데이트 기록 카드 탭 → 기록 상세 시트 오픈 (지도 핀과 동일) */
   onSelectRecord?: (recordId: string) => void;
+  /** 오늘 기록 행 탭 → 그날 상세 시트 오픈 (잔디 칸과 동일) */
+  onSelectDay?: (date: string) => void;
 }) {
   const { couple, entryDate } = useTodayContext();
   const { data: records = [], isPending } = useRecords();
@@ -50,7 +53,7 @@ export default function Timeline({
             onSelect={onSelectRecord}
           />
         ) : (
-          <DailyItem key={`d-${item.date}`} summary={item.summary} />
+          <DailyItem key={`d-${item.date}`} summary={item.summary} onSelect={onSelectDay} />
         ),
       )}
     </ol>
@@ -110,22 +113,35 @@ function RecordItem({
   );
 }
 
-/** 오늘 기록 요약 행 — 일상 기록은 잔잔한 톤으로 (데이트 기록과 구분) */
-function DailyItem({ summary: s }: { summary: DailyDaySummary }) {
+/** 오늘 기록 요약 행 — 일상 기록은 잔잔한 톤으로 (데이트 기록과 구분), 탭하면 그날 상세 */
+function DailyItem({
+  summary: s,
+  onSelect,
+}: {
+  summary: DailyDaySummary;
+  onSelect?: (date: string) => void;
+}) {
   const parts = [
     s.photoCount > 0 ? `사진 ${s.photoCount}장` : null,
     s.answeredCount > 0 ? `답한 질문 ${s.answeredCount}` : null,
     s.noteCount > 0 ? `일기 ${s.noteCount}` : null,
   ].filter(Boolean);
   return (
-    <li className="rounded-2xl rounded-br-md border border-ink/10 bg-white/40 px-4 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 flex-1 text-sm">
-          <span className="text-xs opacity-50">{s.date} · 오늘</span>
-          <span className="ml-2 opacity-80">{parts.join(' · ')}</span>
-        </p>
-        {s.moods.length > 0 && <span className="shrink-0 text-base">{s.moods.join(' ')}</span>}
-      </div>
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect?.(s.date)}
+        aria-label={`${s.date} 그날 보기`}
+        className="w-full rounded-2xl rounded-br-md border border-ink/10 bg-white/40 px-4 py-3 text-left active:translate-y-px"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 flex-1 text-sm">
+            <span className="text-xs opacity-50">{s.date} · 오늘</span>
+            <span className="ml-2 opacity-80">{parts.join(' · ')}</span>
+          </p>
+          {s.moods.length > 0 && <span className="shrink-0 text-base">{s.moods.join(' ')}</span>}
+        </div>
+      </button>
     </li>
   );
 }

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useSession } from '../../shared/lib/auth';
 import { KAKAO_JS_KEY } from '../../shared/lib/kakaoMap';
+import PhotoViewer from '../../shared/ui/PhotoViewer';
 import { useCoupleState } from '../couple/useCoupleState';
+import { DayDetailSheet } from '../today/TodayScreen';
 import ConquestMap from './ConquestMap';
 import KakaoBaseMap from './KakaoBaseMap';
 import RecapCardSheet from './RecapCardSheet';
@@ -51,6 +53,9 @@ export default function MapScreen() {
   const [recapOpen, setRecapOpen] = useState(false);
   // 지도 핀·타임라인 카드 공용 상세 시트 — 선택된 기록 id
   const [detailId, setDetailId] = useState<string | null>(null);
+  // 타임라인 '오늘' 행 탭 → 그날 상세 (잔디 칸과 동일 시트)
+  const [dayDate, setDayDate] = useState<string | null>(null);
+  const [dayViewerUrl, setDayViewerUrl] = useState<string | null>(null);
   // 수정 플로우: 상세 시트의 '고치기' → 상세를 닫고 작성 시트를 수정 모드로 연다
   const [editRecord, setEditRecord] = useState<RecordRow | null>(null);
   const { session } = useSession();
@@ -151,7 +156,7 @@ export default function MapScreen() {
               📤 종합 카드
             </button>
           </div>
-          <Timeline filter={filter} onSelectRecord={setDetailId} />
+          <Timeline filter={filter} onSelectRecord={setDetailId} onSelectDay={setDayDate} />
         </>
       )}
 
@@ -173,6 +178,17 @@ export default function MapScreen() {
         editRecord={editRecord ?? undefined}
       />
       <RecapCardSheet open={recapOpen} onClose={() => setRecapOpen(false)} coupleId={coupleId} />
+      {dayDate !== null && (
+        <DayDetailSheet
+          coupleId={coupleId}
+          userId={session?.user.id}
+          startedAt={coupleState.data?.couple?.started_at ?? null}
+          date={dayDate}
+          onClose={() => setDayDate(null)}
+          onView={setDayViewerUrl}
+        />
+      )}
+      <PhotoViewer url={dayViewerUrl} onClose={() => setDayViewerUrl(null)} />
       <RecordDetailSheet
         recordId={detailId}
         onClose={() => setDetailId(null)}

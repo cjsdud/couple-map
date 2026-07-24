@@ -638,8 +638,8 @@ function GrassCard({
   );
 }
 
-// ── 그날 상세 시트 (잔디 칸 탭 — 기분·일기·질문 답·사진) ──────────
-function DayDetailSheet({
+// ── 그날 상세 시트 (잔디 칸·타임라인 오늘 행 탭 — 기분·일기·질문 답·사진) ──
+export function DayDetailSheet({
   coupleId,
   userId,
   startedAt,
