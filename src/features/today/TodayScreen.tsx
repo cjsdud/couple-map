@@ -770,6 +770,7 @@ function DayDetailSheet({
             onClose={() => setShareOpen(false)}
             fileName={`dohwaji-${date}.png`}
             captionPlaceholder="한마디 남기기 (선택)"
+            contentKey={`${photoUrls.length}-${question.data ? 1 : 0}`}
             paint={(canvas, theme, caption) =>
               paintDayCard(canvas, {
                 theme,

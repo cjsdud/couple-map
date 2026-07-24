@@ -116,6 +116,17 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
 
   const spots = record ? record.spots.slice().sort((a, b) => a.seq - b.seq) : [];
   const total = record ? record.expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
+  // 공유 카드 데이터 — 사진·지역명이 늦게 로드돼도 contentKey로 다시 그린다
+  const sharePhotoUrls = photos.map((p) => p.signedUrl).filter((u): u is string => Boolean(u));
+  const shareRegionNames = [
+    ...new Set(
+      spots
+        .map((s) => s.sigungu_code)
+        .filter((c): c is string => c !== null)
+        .map((c) => sigunguNames[c])
+        .filter((n): n is string => Boolean(n)),
+    ),
+  ];
 
   return (
     <BottomSheet open={record !== null} onClose={close}>
@@ -213,24 +224,15 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
             fileName={`dohwaji-${record.date}.png`}
             defaultCaption={record.memo ?? ''}
             captionPlaceholder="한마디 남기기 (선택)"
+            contentKey={`${sharePhotoUrls.length}-${shareRegionNames.length}`}
             paint={(canvas, theme, caption) =>
               paintRecordCard(canvas, {
                 theme,
                 date: record.date,
                 spotNames: spots.map((s) => s.name),
                 memo: caption,
-                regionNames: [
-                  ...new Set(
-                    spots
-                      .map((s) => s.sigungu_code)
-                      .filter((c): c is string => c !== null)
-                      .map((c) => sigunguNames[c])
-                      .filter((n): n is string => Boolean(n)),
-                  ),
-                ],
-                photoUrls: photos
-                  .map((p) => p.signedUrl)
-                  .filter((u): u is string => Boolean(u)),
+                regionNames: shareRegionNames,
+                photoUrls: sharePhotoUrls,
               })
             }
           />

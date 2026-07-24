@@ -12,6 +12,11 @@ interface Props {
   defaultCaption?: string;
   /** 문구 입력 안내 문구 */
   captionPlaceholder?: string;
+  /**
+   * 카드에 들어가는 비동기 데이터의 준비 상태 키 (예: `${사진수}-${지역수}`).
+   * 열린 뒤 사진·지역명이 늦게 도착해도 이 키가 바뀌며 다시 그린다.
+   */
+  contentKey?: string;
 }
 
 /**
@@ -25,6 +30,7 @@ export default function ShareCardSheet({
   fileName,
   defaultCaption = '',
   captionPlaceholder = '문구 넣기 (선택)',
+  contentKey = '',
 }: Props) {
   const [theme, setTheme] = useState<ShareTheme>('paper');
   const [caption, setCaption] = useState(defaultCaption);
@@ -35,9 +41,9 @@ export default function ShareCardSheet({
       <div className="space-y-3 pb-2">
         <ThemePicker theme={theme} onPick={setTheme} />
         <CaptionField value={caption} onChange={setCaption} placeholder={captionPlaceholder} />
-        {/* theme·문구가 바뀌면 새로 그린다 */}
+        {/* theme·문구·데이터 준비 상태가 바뀌면 새로 그린다 */}
         <CardPreview
-          key={`${theme}|${applied}`}
+          key={`${theme}|${applied}|${contentKey}`}
           paint={(canvas) => paint(canvas, theme, applied)}
           fileName={fileName}
         />
