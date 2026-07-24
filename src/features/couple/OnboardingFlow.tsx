@@ -283,6 +283,13 @@ function WaitingStep({
       >
         {refetching ? '확인하는 중…' : '연결됐는지 확인하기'}
       </button>
+      {/* 기다리는 동안 이탈 방지 — 예시 데이터로 앱을 미리 보여준다 */}
+      <a
+        href="/?mock=1"
+        className="block px-4 py-1 text-sm opacity-50 underline underline-offset-2"
+      >
+        기다리는 동안 앱 미리 구경하기
+      </a>
     </div>
   );
 }

@@ -76,8 +76,11 @@ function Gate() {
   if (new URLSearchParams(window.location.search).has('mock')) {
     return (
       <>
-        <div className="sticky top-0 z-50 bg-sky/60 px-4 py-1.5 text-center text-xs font-semibold">
-          미리보기 모드 — 예시 화면이라 저장되지 않아요
+        <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-sky/60 px-4 py-1.5 text-center text-xs font-semibold">
+          <span>미리보기 모드 — 예시 화면이라 저장되지 않아요</span>
+          <a href="/" className="shrink-0 underline underline-offset-2">
+            나가기
+          </a>
         </div>
         <AppShell />
       </>
