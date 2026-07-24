@@ -300,9 +300,10 @@ export default function ConquestMap({
   );
   // 시군구 이름은 2.6배부터 — 행정동 세분화는 어지럽다는 사용자 피드백(2026-07-23)으로 제거
   const showRegionNames = scaleFactor <= 1 / 2.6;
-  // 시군구 경계 그물망은 기본 배율에서 감춤(선거지도 느낌 제거) → 확대할수록 서서히 나타남
-  const detail = Math.max(0, Math.min(1, (1 / scaleFactor - 1.6) / 2.5));
-  const sigunguLineOpacity = detail * 0.24;
+  // 시군구 경계 그물망은 기본 배율에서 감춤(선거지도 느낌 제거) → 확대할수록 서서히 나타남.
+  // 수도권처럼 작은 시·구가 밀집한 곳이 뭉쳐 보이지 않게 시작을 늦추고 상한을 낮게.
+  const detail = Math.max(0, Math.min(1, (1 / scaleFactor - 2) / 2.5));
+  const sigunguLineOpacity = detail * 0.18;
   // 라벨은 현재 화면 안의 지역만 — 경계 밖에 걸친 글자 방지
   const viewH = projected?.viewH ?? VIEW_W;
   const vbH = vb.w * (viewH / VIEW_W);
@@ -370,8 +371,8 @@ export default function ConquestMap({
                   d={p.d}
                   fill="none"
                   stroke={CONQUEST_STROKE}
-                  strokeOpacity="0.55"
-                  strokeWidth="1.4"
+                  strokeOpacity="0.45"
+                  strokeWidth="1.1"
                   strokeLinejoin="round"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -385,8 +386,8 @@ export default function ConquestMap({
               d={d}
               fill="none"
               stroke="#4a453d"
-              strokeOpacity="0.38"
-              strokeWidth="1.4"
+              strokeOpacity="0.34"
+              strokeWidth="1.15"
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
             />
