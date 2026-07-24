@@ -379,11 +379,12 @@ export default function ConquestMap({
             />
           ))}
         </g>
-        {/* 확대하면 시군구 이름 — 화면 안 + 글자가 지역 폭 안에 들어가는 곳만 (삐져나감 방지) */}
+        {/* 확대하면 시군구 이름 — '어디인지 구분'만 되게 은은하게 (내가 간 곳이 주인공, 지역명은 보조).
+            화면 안 + 글자가 지역 폭 안에 들어가는 곳만 (삐져나감 방지) */}
         {showRegionNames && (
           <g pointerEvents="none">
             {projected.paths
-              .filter((p) => inView(p.cx, p.cy) && p.name.length * 26 * scaleFactor * 0.95 <= p.lw)
+              .filter((p) => inView(p.cx, p.cy) && p.name.length * 20 * scaleFactor * 0.95 <= p.lw)
               .map((p) => (
                 <text
                   key={`label-${p.code}`}
@@ -391,12 +392,12 @@ export default function ConquestMap({
                   y={p.cy}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fontSize={26 * scaleFactor}
-                  fontWeight={700}
+                  fontSize={20 * scaleFactor}
+                  fontWeight={500}
                   fill="#3b3733"
-                  opacity={0.72}
+                  opacity={0.4}
                   stroke={paper}
-                  strokeWidth={5 * scaleFactor}
+                  strokeWidth={3.5 * scaleFactor}
                   paintOrder="stroke"
                 >
                   {p.name}
