@@ -15,6 +15,7 @@ import {
   useDailyPhotos,
   useDayDetail,
   useDayQuestion,
+  useDeleteDailyPhoto,
   useGrass,
   useQuestionOfDay,
   useSaveToday,
@@ -397,8 +398,12 @@ function UploadCard({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadPhoto(ctx);
+  const deletePhoto = useDeleteDailyPhoto();
+  // 지우기는 2탭 확인 — 첫 탭에 '지우기?'로 바뀌고 한 번 더 누르면 삭제
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [withLocation, setWithLocation] = useState(false);
   const canUpload = Boolean(supabase) && participated && myCount < DAILY_PHOTO_LIMIT;
+  const canDelete = Boolean(supabase) && !isMock();
 
   const pick = (file: File) => {
     if (!withLocation) {
@@ -442,9 +447,39 @@ function UploadCard({
                   📍 핀으로
                 </button>
               )}
+              {canDelete && (
+                <button
+                  type="button"
+                  aria-label={confirmId === p.id ? '이 사진 정말 지우기' : '이 사진 지우기'}
+                  disabled={deletePhoto.isPending}
+                  onClick={() => {
+                    if (confirmId === p.id) {
+                      deletePhoto.mutate({ id: p.id, storagePath: p.storage_path });
+                      setConfirmId(null);
+                    } else {
+                      setConfirmId(p.id);
+                    }
+                  }}
+                  className={`absolute right-1 top-1 flex h-7 items-center justify-center rounded-full shadow-sm active:translate-y-px disabled:opacity-40 ${
+                    confirmId === p.id
+                      ? 'bg-ink px-2 text-[11px] font-bold text-paper'
+                      : 'w-7 bg-paper/85 text-sm text-ink'
+                  }`}
+                >
+                  {confirmId === p.id ? '지우기?' : '✕'}
+                </button>
+              )}
             </div>
           ))}
         </div>
+      )}
+      {confirmId !== null && myCount === 1 && (
+        <p className="break-keep text-xs opacity-60">
+          마지막 사진을 지우면 짝꿍의 오늘 사진도 다시 잠겨요
+        </p>
+      )}
+      {deletePhoto.isError && (
+        <p className="text-xs text-pink">사진을 지우지 못했어요. 다시 시도해 주세요.</p>
       )}
       {participated && (
         <div className="space-y-0.5">

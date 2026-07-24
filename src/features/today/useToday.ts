@@ -129,6 +129,29 @@ export function useUploadPhoto(ctx: { coupleId?: string; userId?: string; entryD
   });
 }
 
+/**
+ * 오늘 사진 지우기 — 행 삭제(RLS: 본인 엔트리만) 후 스토리지 원본 제거 시도.
+ * 마지막 장을 지우면 select 정책에 따라 짝꿍 사진이 자동으로 다시 잠긴다.
+ */
+export function useDeleteDailyPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (photo: { id: string; storagePath: string }) => {
+      if (!supabase) throw new Error('Supabase 연결 후 지울 수 있어요');
+      const { error } = await supabase.from('daily_photos').delete().eq('id', photo.id);
+      if (error) throw error;
+      try {
+        await supabase.storage.from('photos').remove([photo.storagePath]);
+      } catch {
+        // 행 삭제는 반영 — 원본 제거 실패는 무시 (후속 정리 배치)
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['daily-photos'] });
+    },
+  });
+}
+
 /** 통합 작성 카드의 입력값 — 세 항목 전부 선택 사항, 하나 이상 채우면 저장 */
 export interface TodayDraft {
   mood: string | null;
