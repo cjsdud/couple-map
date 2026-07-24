@@ -41,6 +41,72 @@ export function upcomingMilestones(startedAt: string, today: string, limit = 3):
   return out.sort((a, b) => a.dDay - b.dDay).slice(0, limit);
 }
 
+// ── 커스텀 기념일 (anniversaries 테이블 — RLS 커플 격리) ─────────
+export interface Anniversary {
+  id: string;
+  title: string;
+  date: string;
+  kind: 'auto' | 'custom';
+}
+
+const isMockMode = () => new URLSearchParams(window.location.search).has('mock');
+
+export function useAnniversaries(coupleId: string | undefined) {
+  return useQuery({
+    queryKey: ['anniversaries', coupleId],
+    queryFn: async (): Promise<Anniversary[]> => {
+      if (isMockMode())
+        return [{ id: 'mock-a1', title: '처음 만난 날', date: '2026-01-10', kind: 'custom' }];
+      if (!supabase || !coupleId) return [];
+      const { data, error } = await supabase
+        .from('anniversaries')
+        .select('id, title, date, kind')
+        .order('date');
+      if (error) throw error;
+      return data as Anniversary[];
+    },
+    enabled: isMockMode() || Boolean(supabase && coupleId),
+  });
+}
+
+export function useAddAnniversary(coupleId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (draft: { title: string; date: string }) => {
+      if (!supabase || !coupleId) throw new Error('Supabase 연결 후 넣을 수 있어요');
+      const { error } = await supabase
+        .from('anniversaries')
+        .insert({ couple_id: coupleId, title: draft.title, date: draft.date, kind: 'custom' });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['anniversaries'] }),
+  });
+}
+
+export function useDeleteAnniversary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!supabase) throw new Error('Supabase 연결 후 지울 수 있어요');
+      const { error } = await supabase.from('anniversaries').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['anniversaries'] }),
+  });
+}
+
+/** 커스텀 기념일의 다가오는 발생일 — 지난 날짜는 매년 돌아오는 기념일로 센다 */
+export function nextOccurrence(date: string, today: string): { date: string; dDay: number } {
+  const now = new Date(`${today}T12:00:00`).getTime();
+  const [y, m, day] = date.split('-').map(Number);
+  let d = new Date(y, m - 1, day, 12);
+  if (d.getTime() < now) {
+    d = new Date(Number(today.slice(0, 4)), m - 1, day, 12);
+    if (d.getTime() < now) d = new Date(d.getFullYear() + 1, m - 1, day, 12);
+  }
+  return { date: toDateString(d), dDay: Math.round((d.getTime() - now) / DAY_MS) };
+}
+
 export interface MonthlyExpenseRow {
   amount: number;
   category: ExpenseCategory;

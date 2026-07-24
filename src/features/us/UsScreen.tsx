@@ -13,7 +13,16 @@ import {
 import { useCoupleState, useUpdateNickname, type Couple } from '../couple/useCoupleState';
 import { useStreakDays } from '../today/useToday';
 import { categoryLabel, useCoupleMembers } from '../map/useRecords';
-import { dPlus, upcomingMilestones, useMonthlyExpenses, useUpdateCouple } from './useUs';
+import {
+  dPlus,
+  nextOccurrence,
+  upcomingMilestones,
+  useAddAnniversary,
+  useAnniversaries,
+  useDeleteAnniversary,
+  useMonthlyExpenses,
+  useUpdateCouple,
+} from './useUs';
 
 /** 우리 탭: 디데이·기념일 / 가계부 월간 카드 / 설정 (명세 §3.3) */
 export default function UsScreen() {
@@ -29,7 +38,7 @@ export default function UsScreen() {
   return (
     <main className="space-y-4 px-4 py-6">
       <h1 className="text-2xl font-bold">우리</h1>
-      <DdayCard startedAt={startedAt} today={today} />
+      <DdayCard startedAt={startedAt} today={today} coupleId={couple?.id} mock={isMock} />
       <ExpenseMonthCard today={today} />
       <ThemeCard couple={couple} userId={userId} mock={isMock} />
       <SettingsCard
@@ -44,39 +53,141 @@ export default function UsScreen() {
   );
 }
 
-// ── 디데이 + 다가오는 기념일 (100일 단위·주년 자동) ──────────────
-function DdayCard({ startedAt, today }: { startedAt: string | null; today: string }) {
-  if (!startedAt) {
-    return (
-      <section className="rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/60 p-5 text-center">
-        <p className="text-sm opacity-60">함께한 지</p>
-        <p className="text-3xl font-bold text-pink">D+?</p>
-        <p className="mt-1 text-xs opacity-50">아래 설정에서 사귄 날을 알려주시면 세어 드려요</p>
-      </section>
+// ── 디데이 + 다가오는 기념일 (100일 단위·주년 자동 + 우리만의 기념일) ──
+function DdayCard({
+  startedAt,
+  today,
+  coupleId,
+  mock,
+}: {
+  startedAt: string | null;
+  today: string;
+  coupleId: string | undefined;
+  mock: boolean;
+}) {
+  const anniversaries = useAnniversaries(coupleId).data ?? [];
+  const addAnniversary = useAddAnniversary(coupleId);
+  const deleteAnniversary = useDeleteAnniversary();
+  const [adding, setAdding] = useState(false);
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState('');
+  const canEdit = !mock && Boolean(supabase && coupleId);
+  const draftValid = title.trim().length >= 1 && title.trim().length <= 16 && Boolean(date);
+
+  // 자동(100일·주년) + 커스텀(지난 날짜는 매년 반복) 병합, 가까운 순 5개
+  const auto = startedAt ? upcomingMilestones(startedAt, today) : [];
+  const custom = anniversaries
+    .filter((a) => a.kind === 'custom')
+    .map((a) => {
+      const next = nextOccurrence(a.date, today);
+      return { id: a.id as string | null, title: a.title, date: next.date, dDay: next.dDay };
+    });
+  const list = [...auto.map((m) => ({ ...m, id: null as string | null })), ...custom]
+    .sort((a, b) => a.dDay - b.dDay)
+    .slice(0, 5);
+
+  const submit = () => {
+    if (!draftValid || addAnniversary.isPending) return;
+    addAnniversary.mutate(
+      { title: title.trim(), date },
+      {
+        onSuccess: () => {
+          setAdding(false);
+          setTitle('');
+          setDate('');
+        },
+      },
     );
-  }
-  const milestones = upcomingMilestones(startedAt, today);
+  };
+
   return (
     <section className="space-y-3 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/60 p-5">
       <div className="text-center">
         <p className="text-sm opacity-60">함께한 지</p>
-        <p className="text-4xl font-bold text-pink">D+{dPlus(startedAt, today)}</p>
-        <p className="mt-0.5 text-xs opacity-50">{startedAt}부터</p>
+        <p className="text-4xl font-bold text-pink">{startedAt ? `D+${dPlus(startedAt, today)}` : 'D+?'}</p>
+        <p className="mt-0.5 text-xs opacity-50">
+          {startedAt ?? '아래 설정에서 사귄 날을 알려주시면 세어 드려요'}
+          {startedAt && '부터'}
+        </p>
       </div>
-      {milestones.length > 0 && (
+
+      {list.length > 0 && (
         <ul className="space-y-1.5 border-t border-ink/10 pt-3">
-          {milestones.map((m) => (
-            <li key={m.title} className="flex items-center justify-between text-sm">
-              <span className="font-semibold">
+          {list.map((m) => (
+            <li key={m.id ?? m.title} className="flex items-center justify-between gap-2 text-sm">
+              <span className="min-w-0 flex-1 truncate font-semibold">
                 {m.title}
                 <span className="ml-1.5 text-xs font-normal opacity-50">{m.date}</span>
               </span>
-              <span className={m.dDay <= 7 ? 'font-bold text-pink' : 'opacity-60'}>
+              <span className={m.dDay <= 7 ? 'shrink-0 font-bold text-pink' : 'shrink-0 opacity-60'}>
                 {m.dDay === 0 ? '오늘!' : `D-${m.dDay}`}
               </span>
+              {m.id !== null && (
+                <button
+                  type="button"
+                  aria-label={`${m.title} 기념일 지우기`}
+                  disabled={!canEdit || deleteAnniversary.isPending}
+                  onClick={() => deleteAnniversary.mutate(m.id as string)}
+                  className="-my-1 -mr-1.5 shrink-0 p-1.5 text-xs opacity-40 disabled:opacity-15"
+                >
+                  ✕
+                </button>
+              )}
             </li>
           ))}
         </ul>
+      )}
+
+      {adding ? (
+        <div className="space-y-2 border-t border-ink/10 pt-3">
+          <div className="flex gap-2">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={16}
+              placeholder="기념일 이름 (16자까지)"
+              className="min-w-0 flex-1 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-3 py-2 text-sm outline-none focus:border-pink"
+            />
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-36 shrink-0 rounded-2xl border-2 border-ink/15 bg-white/70 px-2 py-2 text-sm outline-none focus:border-pink"
+            />
+          </div>
+          {addAnniversary.isError && (
+            <p className="text-xs text-pink">넣지 못했어요. 다시 시도해 주세요.</p>
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setAdding(false)}
+              className="flex-1 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 py-2 text-sm font-bold active:translate-y-px"
+            >
+              그만두기
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!draftValid || !canEdit || addAnniversary.isPending}
+              className="flex-1 rounded-2xl rounded-br-md bg-pink py-2 text-sm font-bold text-white active:translate-y-px disabled:opacity-40"
+            >
+              {addAnniversary.isPending ? '넣는 중…' : '기념일 넣기'}
+            </button>
+          </div>
+          <p className="break-keep text-xs opacity-45">
+            지난 날짜(생일·처음 만난 날 등)는 매년 돌아오는 기념일로 세어 드려요
+          </p>
+          {mock && <p className="text-xs opacity-50">미리보기예요 — 저장은 짝꿍과 연결한 뒤에 할 수 있어요</p>}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="w-full rounded-2xl rounded-tl-md border-2 border-dashed border-ink/20 bg-white/50 py-2 text-sm font-semibold"
+        >
+          + 우리만의 기념일 넣기
+        </button>
       )}
     </section>
   );
