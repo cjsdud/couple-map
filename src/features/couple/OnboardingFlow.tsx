@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { signOut, suggestedNickname } from '../../shared/lib/auth';
+import { clearInviteCode, inviteLink, pendingInviteCode } from '../../shared/lib/invite';
 import {
   useCreateCouple,
   useCreateProfile,
@@ -116,10 +117,12 @@ function NicknameStep({ userId }: { userId: string }) {
 
 // ── ② 초대 코드 만들기 / 입력 분기 ────────────────────────────────
 function ConnectStep({ userId, nickname }: { userId: string; nickname: string }) {
-  const [mode, setMode] = useState<'choose' | 'join'>('choose');
+  // 초대 링크로 들어왔다면 코드 입력 화면으로 직행 + 코드 프리필
+  const [invited] = useState(pendingInviteCode);
+  const [mode, setMode] = useState<'choose' | 'join'>(invited ? 'join' : 'choose');
   const createCouple = useCreateCouple(userId);
   const joinCouple = useJoinCouple(userId);
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(invited ?? '');
 
   if (mode === 'join') {
     const codeValid = /^[A-Z0-9]{6}$/.test(code);
@@ -127,12 +130,17 @@ function ConnectStep({ userId, nickname }: { userId: string; nickname: string })
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (codeValid && !joinCouple.isPending) joinCouple.mutate(code);
+          if (codeValid && !joinCouple.isPending)
+            joinCouple.mutate(code, { onSuccess: clearInviteCode });
         }}
         className="space-y-4"
       >
         <h1 className="text-2xl font-bold">초대 코드 입력</h1>
-        <p className="text-sm opacity-60">짝꿍에게 받은 6자리 코드를 그대로 적어 주세요.</p>
+        <p className="text-sm opacity-60">
+          {invited
+            ? '💌 초대장에서 코드를 가져왔어요 — 확인하고 연결해 주세요.'
+            : '짝꿍에게 받은 6자리 코드를 그대로 적어 주세요.'}
+        </p>
         <input
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
@@ -212,15 +220,33 @@ function WaitingStep({
   refetching: boolean;
   onRefetch: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+  const link = inviteLink(inviteCode);
 
-  const copy = async () => {
+  const copy = async (kind: 'code' | 'link') => {
     try {
-      await navigator.clipboard.writeText(inviteCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(kind === 'code' ? inviteCode : link);
+      setCopied(kind);
+      setTimeout(() => setCopied(null), 2000);
     } catch {
       // 클립보드 미지원 WebView — 코드가 크게 보이므로 손으로 옮겨 적을 수 있다
+    }
+  };
+
+  // 초대장 보내기 — 공유 시트(카톡 등)로 링크 전달, 미지원이면 링크 복사
+  const sendInvite = () => {
+    if (typeof navigator.share === 'function') {
+      navigator
+        .share({
+          title: '우리의 도화지',
+          text: `우리 둘만의 지도를 같이 채워보자 🖍️ 초대 코드: ${inviteCode}`,
+          url: link,
+        })
+        .catch(() => {
+          // 공유 시트를 그냥 닫은 경우 — 무시
+        });
+    } else {
+      void copy('link');
     }
   };
 
@@ -234,13 +260,20 @@ function WaitingStep({
       </div>
       <button
         type="button"
-        onClick={() => void copy()}
-        className="w-full rounded-2xl rounded-tl-md bg-sky px-6 py-3 text-base font-bold text-ink shadow-sm active:translate-y-px"
+        onClick={sendInvite}
+        className="w-full rounded-2xl rounded-tl-md bg-pink px-6 py-3.5 text-base font-bold text-white shadow-sm active:translate-y-px"
       >
-        {copied ? '복사했어요!' : '코드 복사하기'}
+        {copied === 'link' ? '초대 링크를 복사했어요!' : '💌 초대장 보내기'}
       </button>
-      <p className="text-sm opacity-60">
-        짝꿍이 이 코드를 입력하면 자동으로 연결돼요.
+      <button
+        type="button"
+        onClick={() => void copy('code')}
+        className="w-full rounded-2xl rounded-br-md border-2 border-ink/15 bg-white/70 px-6 py-3 text-base font-bold shadow-sm active:translate-y-px"
+      >
+        {copied === 'code' ? '복사했어요!' : '코드만 복사하기'}
+      </button>
+      <p className="break-keep text-sm opacity-60">
+        초대장을 받은 짝꿍은 코드가 자동으로 채워져요 — 코드를 직접 입력해도 돼요.
       </p>
       <button
         type="button"

@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { signInWithKakao } from '../../shared/lib/auth';
+import { pendingInviteCode } from '../../shared/lib/invite';
 import { supabase } from '../../shared/lib/supabase';
 
 export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
   // 카카오 인증이 안 되는 사용자를 위한 정식 대체 경로 (사용자 요청 2026-07-23)
   const [emailOpen, setEmailOpen] = useState(false);
+  // 초대 링크로 들어온 짝꿍 — 로그인만 하면 코드가 자동으로 이어진다
+  const [invited] = useState(() => pendingInviteCode() !== null);
 
   const handleKakao = async () => {
     setBusy(true);
@@ -25,6 +28,12 @@ export default function LoginScreen() {
         <p className="mt-2 text-sm opacity-60">
           짝꿍과 둘이서 채워가는 지도 한 장
         </p>
+
+        {invited && (
+          <p className="mt-5 w-full rounded-2xl rounded-tl-md border-2 border-pink/40 bg-pink/10 px-4 py-3 text-sm font-semibold">
+            💌 짝꿍의 초대장이 도착했어요 — 로그인하면 바로 연결돼요
+          </p>
+        )}
 
         <button
           type="button"
