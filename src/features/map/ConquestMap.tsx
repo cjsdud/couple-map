@@ -26,6 +26,17 @@ const CONQUEST_STROKE = '#6f9450';
 /** 시·군·구 경계선 색 (기본 배율엔 거의 안 보이고 확대할수록 진해진다) */
 const SIGUNGU_LINE = '#6b6357';
 
+/**
+ * 한강 (팔당→서울→김포 하구, 스타일라이즈 중심선) — 서울을 서울답게 만드는 랜드마크.
+ * 시도 dissolve로 구 경계(=강줄기 자리)가 사라지면서 서울이 밋밋해진 것 보완.
+ */
+const HAN_RIVER: [number, number][] = [
+  [127.318, 37.542], [127.23, 37.555], [127.16, 37.548], [127.105, 37.52],
+  [127.065, 37.52], [127.02, 37.532], [126.993, 37.517], [126.952, 37.51],
+  [126.925, 37.532], [126.9, 37.552], [126.868, 37.555], [126.833, 37.578],
+  [126.788, 37.598], [126.75, 37.628], [126.718, 37.657],
+];
+
 /** 위도 36° 기준 등장방형 근사 — 정복 개요 지도용으로 충분, SDK 불필요 (tech-design §3) */
 function useProjectedPaths(geo: SigunguGeo | undefined) {
   return useMemo(() => {
@@ -62,6 +73,7 @@ function useProjectedPaths(geo: SigunguGeo | undefined) {
       let cx = 0;
       let cy = 0;
       let lw = 0; // 본체 bbox 폭 — 글자가 지역을 삐져나가는지 판정용
+      let lh = 0; // 본체 bbox 높이 — 세로로 좁은 지역 라벨 방지
       const d = polys
         .flatMap((poly) =>
           poly.map((ring, ringIdx) => {
@@ -80,13 +92,14 @@ function useProjectedPaths(geo: SigunguGeo | undefined) {
                 cx = (mnx + mxx) / 2;
                 cy = (mny + mxy) / 2;
                 lw = mxx - mnx;
+                lh = mxy - mny;
               }
             }
             return `M${ring.map(toSvg).join('L')}Z`;
           }),
         )
         .join('');
-      return { code: f.properties.code, name: f.properties.name, d, cx, cy, lw };
+      return { code: f.properties.code, name: f.properties.name, d, cx, cy, lw, lh };
     });
     return { paths, viewH, toXY };
   }, [geo]);
@@ -379,6 +392,20 @@ export default function ConquestMap({
               </g>
             );
           })}
+          {/* ③-1 한강 — 서울의 랜드마크 물줄기 (확대할수록 자연스럽게 굵어짐) */}
+          <path
+            d={`M${HAN_RIVER.map((pt) => {
+              const [x, y] = projected.toXY(pt[0], pt[1]);
+              return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join('L')}`}
+            fill="none"
+            stroke="#b5d3e0"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.95"
+            pointerEvents="none"
+          />
           {/* ④ 시·도 경계 + 해안선 — 부드러운 잉크선 한 겹으로 '손으로 그린 지도' 인상 */}
           {sidoPaths.map((d, i) => (
             <path
@@ -398,7 +425,13 @@ export default function ConquestMap({
         {showRegionNames && (
           <g pointerEvents="none">
             {projected.paths
-              .filter((p) => inView(p.cx, p.cy) && p.name.length * 20 * scaleFactor * 0.95 <= p.lw)
+              .filter(
+                (p) =>
+                  inView(p.cx, p.cy) &&
+                  // 가로·세로 모두 여유 있게 들어갈 때만 (계속 삐져나간다는 피드백 → 여유폭 강화)
+                  p.name.length * 20 * scaleFactor <= p.lw * 0.8 &&
+                  26 * scaleFactor <= p.lh,
+              )
               .map((p) => (
                 <text
                   key={`label-${p.code}`}

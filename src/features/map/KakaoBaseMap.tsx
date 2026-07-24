@@ -53,11 +53,11 @@ export default function KakaoBaseMap({
     void loadKakaoMaps()
       .then(() => {
         if (cancelled || !containerRef.current) return;
+        // 기본 UI는 최소로 — 줌컨트롤 등 부가 요소 없이 지도만 (지저분함 제거, 핀치/더블탭 줌은 SDK 기본)
         const map = new window.kakao.maps.Map(containerRef.current, {
           center: new window.kakao.maps.LatLng(36.3, 127.8),
           level: 13,
         });
-        map.addControl(new window.kakao.maps.ZoomControl(), window.kakao.maps.ControlPosition.RIGHT);
         mapRef.current = map;
         setStatus('ready');
       })
@@ -103,6 +103,12 @@ export default function KakaoBaseMap({
     const map = mapRef.current;
     if (status !== 'ready' || !map) return;
     const overlays: (kakao.maps.CustomOverlay | kakao.maps.Polyline)[] = [];
+    // 핀 이름 라벨은 도시권 확대(level<=8)에서만 — 전국 뷰에서 이름들이 겹쳐 지저분해지는 것 방지
+    const labels: HTMLElement[] = [];
+    const syncLabels = () => {
+      const show = map.getLevel() <= 8;
+      for (const el of labels) el.style.display = show ? '' : 'none';
+    };
     for (const rec of records) {
       const spots = rec.spots
         .slice()
@@ -135,10 +141,12 @@ export default function KakaoBaseMap({
                         display:flex;align-items:center;justify-content:center">
               <span style="width:7px;height:7px;border-radius:50%;background:#fdfcf7;transform:rotate(45deg)"></span>
             </div>
-            <span style="margin-top:3px;font-size:11px;font-weight:700;color:#3b3733;
+            <span data-pin-label style="margin-top:3px;font-size:11px;font-weight:700;color:#3b3733;
                          text-shadow:0 0 3px #fdfcf7,0 0 3px #fdfcf7;white-space:nowrap">${s.name}</span>
           </div>`;
         el.style.cssText = 'background:none;border:none;padding:0;cursor:pointer';
+        const label = el.querySelector<HTMLElement>('[data-pin-label]');
+        if (label) labels.push(label);
         el.addEventListener('click', () => onSelectRecord?.(rec.id));
         overlays.push(
           new window.kakao.maps.CustomOverlay({
@@ -151,7 +159,12 @@ export default function KakaoBaseMap({
         );
       }
     }
-    return () => overlays.forEach((o) => o.setMap(null));
+    syncLabels();
+    window.kakao.maps.event.addListener(map, 'zoom_changed', syncLabels);
+    return () => {
+      window.kakao.maps.event.removeListener(map, 'zoom_changed', syncLabels);
+      overlays.forEach((o) => o.setMap(null));
+    };
   }, [status, records, onSelectRecord]);
 
   if (status === 'error') {

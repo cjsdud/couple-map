@@ -61,6 +61,10 @@ declare namespace kakao.maps {
     constructor();
   }
   const ControlPosition: { RIGHT: unknown };
+  namespace event {
+    function addListener(target: unknown, type: string, handler: () => void): void;
+    function removeListener(target: unknown, type: string, handler: () => void): void;
+  }
 }
 
 interface Window {
