@@ -150,71 +150,130 @@ export interface RecordDraft {
   photos: PhotoDraft[];
 }
 
+/** save_record RPC(0012) 인자 — 스팟 배열 순서가 곧 seq */
+function saveRecordArgs(recordId: string | null, draft: RecordDraft) {
+  return {
+    p_record_id: recordId,
+    p_date: draft.date,
+    p_memo: draft.memo.trim() || null,
+    p_status: draft.status,
+    p_spots: draft.spots.map((s) => ({
+      id: s.id ?? null,
+      name: s.name,
+      lat: s.lat,
+      lng: s.lng,
+      sigungu_code: s.sigunguCode,
+      kakao_place_id: s.kakaoPlaceId,
+    })),
+    p_expenses: draft.expenses.map((e) => ({
+      category: e.category,
+      amount: e.amount,
+      paid_by: e.paidBy,
+    })),
+  };
+}
+
+/** save_record RPC 미적용(0012 마이그레이션 전) 판별 — 기존 순차 경로로 폴백 */
+function isMissingRpc(error: { code?: string; message?: string }): boolean {
+  return error.code === 'PGRST202' || (error.message ?? '').includes('save_record');
+}
+
+/** 기록 스팟 id 조회 — RPC 저장 후 사진 스팟 태그 매핑용 */
+async function fetchSpotIdBySeq(recordId: string): Promise<Map<number, string>> {
+  if (!supabase) return new Map();
+  const { data, error } = await supabase.from('spots').select('id, seq').eq('record_id', recordId);
+  if (error) throw error;
+  return new Map((data ?? []).map((s) => [s.seq as number, s.id as string]));
+}
+
+/** 새 사진 업로드 — 압축(EXIF 제거) → couples/{couple_id}/records/{record_id}/ (+선택 스팟 태그) */
+async function uploadNewPhotos(
+  coupleId: string,
+  recordId: string,
+  photos: PhotoDraft[],
+  spotIdBySeq: Map<number, string>,
+  baseSeq: number,
+) {
+  if (!supabase) return;
+  for (const [i, photo] of photos.entries()) {
+    const blob = await prepareUpload(photo.file);
+    const path = `couples/${coupleId}/records/${recordId}/${crypto.randomUUID()}.webp`;
+    const { error: uploadError } = await supabase.storage
+      .from('photos')
+      .upload(path, blob, { contentType: 'image/webp' });
+    if (uploadError) throw uploadError;
+    const { error: photoError } = await supabase.from('record_photos').insert({
+      record_id: recordId,
+      storage_path: path,
+      seq: baseSeq + i,
+      spot_id: photo.spotIndex !== null ? (spotIdBySeq.get(photo.spotIndex + 1) ?? null) : null,
+    });
+    if (photoError) throw photoError;
+  }
+}
+
 export function useCreateRecord(coupleId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (draft: RecordDraft) => {
       if (!supabase || !coupleId) throw new Error('Supabase 연결 후 저장할 수 있어요');
-      // v1: 클라이언트 순차 insert (원자성은 M1 후속 RPC로 — 실패 시 기록만 남고 재시도 가능)
-      const { data: record, error } = await supabase
-        .from('records')
-        .insert({
-          couple_id: coupleId,
-          date: draft.date,
-          memo: draft.memo.trim() || null,
-          status: draft.status,
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
+      // 원자 저장(save_record RPC, 0012) — 미적용 환경은 기존 순차 insert로 폴백
+      let recordId: string;
+      let spotIdBySeq: Map<number, string>;
+      const { data: rid, error: rpcError } = await supabase.rpc(
+        'save_record',
+        saveRecordArgs(null, draft),
+      );
+      if (!rpcError) {
+        recordId = rid as string;
+        spotIdBySeq = await fetchSpotIdBySeq(recordId);
+      } else if (isMissingRpc(rpcError)) {
+        const { data: record, error } = await supabase
+          .from('records')
+          .insert({
+            couple_id: coupleId,
+            date: draft.date,
+            memo: draft.memo.trim() || null,
+            status: draft.status,
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        recordId = record.id as string;
+        const { data: spotRows, error: spotsError } = await supabase
+          .from('spots')
+          .insert(
+            draft.spots.map((s, i) => ({
+              record_id: recordId,
+              seq: i + 1,
+              name: s.name,
+              lat: s.lat,
+              lng: s.lng,
+              sigungu_code: s.sigunguCode,
+              kakao_place_id: s.kakaoPlaceId,
+            })),
+          )
+          .select('id, seq');
+        if (spotsError) throw spotsError;
+        spotIdBySeq = new Map((spotRows ?? []).map((s) => [s.seq as number, s.id as string]));
 
-      const { data: spotRows, error: spotsError } = await supabase
-        .from('spots')
-        .insert(
-          draft.spots.map((s, i) => ({
-            record_id: record.id,
-            seq: i + 1,
-            name: s.name,
-            lat: s.lat,
-            lng: s.lng,
-            sigungu_code: s.sigunguCode,
-            kakao_place_id: s.kakaoPlaceId,
-          })),
-        )
-        .select('id, seq');
-      if (spotsError) throw spotsError;
-      // 사진의 스팟 태그(spotIndex) → 방금 생성된 spot id 매핑
-      const spotIdBySeq = new Map((spotRows ?? []).map((s) => [s.seq as number, s.id as string]));
-
-      if (draft.expenses.length > 0) {
-        const { error: expensesError } = await supabase.from('expenses').insert(
-          draft.expenses.map((e) => ({
-            record_id: record.id,
-            category: e.category,
-            amount: e.amount,
-            paid_by: e.paidBy,
-          })),
-        );
-        if (expensesError) throw expensesError;
+        if (draft.expenses.length > 0) {
+          const { error: expensesError } = await supabase.from('expenses').insert(
+            draft.expenses.map((e) => ({
+              record_id: recordId,
+              category: e.category,
+              amount: e.amount,
+              paid_by: e.paidBy,
+            })),
+          );
+          if (expensesError) throw expensesError;
+        }
+      } else {
+        throw rpcError;
       }
 
-      // 사진: 압축(EXIF 제거) → couples/{couple_id}/records/{record_id}/ 업로드 (+선택 스팟 태그)
-      for (const [i, photo] of draft.photos.entries()) {
-        const blob = await prepareUpload(photo.file);
-        const path = `couples/${coupleId}/records/${record.id}/${crypto.randomUUID()}.webp`;
-        const { error: uploadError } = await supabase.storage
-          .from('photos')
-          .upload(path, blob, { contentType: 'image/webp' });
-        if (uploadError) throw uploadError;
-        const { error: photoError } = await supabase.from('record_photos').insert({
-          record_id: record.id,
-          storage_path: path,
-          seq: i,
-          spot_id: photo.spotIndex !== null ? (spotIdBySeq.get(photo.spotIndex + 1) ?? null) : null,
-        });
-        if (photoError) throw photoError;
-      }
-      return record.id as string;
+      await uploadNewPhotos(coupleId, recordId, draft.photos, spotIdBySeq, 0);
+      return recordId;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['records'] });
@@ -266,83 +325,94 @@ export function useUpdateRecord(coupleId: string | undefined) {
     mutationFn: async (draft: RecordUpdateDraft) => {
       if (isMock()) return draft; // 데모 모드: 캐시만 갱신 (onSuccess)
       if (!supabase) throw new Error('Supabase 연결 후 고칠 수 있어요');
-      // v1: 클라이언트 순차 처리 (원자성은 M1 후속 RPC로 — useCreateRecord와 동일 트레이드오프)
-      const { error } = await supabase
-        .from('records')
-        .update({
-          date: draft.date,
-          memo: draft.memo.trim() || null,
-          status: draft.status,
-        })
-        .eq('id', draft.recordId);
-      if (error) throw error;
+      // 원자 저장(save_record RPC, 0012) — 미적용 환경은 기존 순차 경로로 폴백
+      let spotIdBySeq: Map<number, string>;
+      const { error: rpcError } = await supabase.rpc(
+        'save_record',
+        saveRecordArgs(draft.recordId, draft),
+      );
+      if (!rpcError) {
+        spotIdBySeq = await fetchSpotIdBySeq(draft.recordId);
+      } else if (isMissingRpc(rpcError)) {
+        const { error } = await supabase
+          .from('records')
+          .update({
+            date: draft.date,
+            memo: draft.memo.trim() || null,
+            status: draft.status,
+          })
+          .eq('id', draft.recordId);
+        if (error) throw error;
 
-      // 스팟 diff — 전삭제·재삽입은 record_photos.spot_id(on delete set null)를 풀어
-      // 기존 사진의 스팟 태그가 사라지므로, 유지 스팟은 id로 update한다.
-      const keptIds = draft.spots.map((s) => s.id).filter((v): v is string => Boolean(v));
-      const { data: existingSpots, error: exSpotsError } = await supabase
-        .from('spots')
-        .select('id')
-        .eq('record_id', draft.recordId);
-      if (exSpotsError) throw exSpotsError;
-      const dropIds = (existingSpots ?? [])
-        .map((r) => r.id as string)
-        .filter((id) => !keptIds.includes(id));
-      if (dropIds.length > 0) {
-        const { error: delSpotsError } = await supabase.from('spots').delete().in('id', dropIds);
-        if (delSpotsError) throw delSpotsError;
-      }
-      // unique(record_id, seq) 임시 충돌 방지 — 유지 스팟을 높은 seq로 비켜 놓고(1-pass)
-      // 정식 seq를 부여한다(2-pass). 신규 스팟은 2-pass에서 제자리 insert.
-      for (const [i, s] of draft.spots.entries()) {
-        if (!s.id) continue;
-        const { error: parkError } = await supabase
+        // 스팟 diff — 전삭제·재삽입은 record_photos.spot_id(on delete set null)를 풀어
+        // 기존 사진의 스팟 태그가 사라지므로, 유지 스팟은 id로 update한다.
+        const keptIds = draft.spots.map((s) => s.id).filter((v): v is string => Boolean(v));
+        const { data: existingSpots, error: exSpotsError } = await supabase
           .from('spots')
-          .update({ seq: 100 + i })
-          .eq('id', s.id);
-        if (parkError) throw parkError;
-      }
-      const spotIdBySeq = new Map<number, string>();
-      for (const [i, s] of draft.spots.entries()) {
-        const seq = i + 1;
-        const fields = {
-          seq,
-          name: s.name,
-          lat: s.lat,
-          lng: s.lng,
-          sigungu_code: s.sigunguCode,
-          kakao_place_id: s.kakaoPlaceId,
-        };
-        if (s.id) {
-          const { error: upError } = await supabase.from('spots').update(fields).eq('id', s.id);
-          if (upError) throw upError;
-          spotIdBySeq.set(seq, s.id);
-        } else {
-          const { data: inserted, error: insError } = await supabase
-            .from('spots')
-            .insert({ record_id: draft.recordId, ...fields })
-            .select('id')
-            .single();
-          if (insError) throw insError;
-          spotIdBySeq.set(seq, inserted.id as string);
+          .select('id')
+          .eq('record_id', draft.recordId);
+        if (exSpotsError) throw exSpotsError;
+        const dropIds = (existingSpots ?? [])
+          .map((r) => r.id as string)
+          .filter((id) => !keptIds.includes(id));
+        if (dropIds.length > 0) {
+          const { error: delSpotsError } = await supabase.from('spots').delete().in('id', dropIds);
+          if (delSpotsError) throw delSpotsError;
         }
-      }
+        // unique(record_id, seq) 임시 충돌 방지 — 유지 스팟을 높은 seq로 비켜 놓고(1-pass)
+        // 정식 seq를 부여한다(2-pass). 신규 스팟은 2-pass에서 제자리 insert.
+        for (const [i, s] of draft.spots.entries()) {
+          if (!s.id) continue;
+          const { error: parkError } = await supabase
+            .from('spots')
+            .update({ seq: 100 + i })
+            .eq('id', s.id);
+          if (parkError) throw parkError;
+        }
+        spotIdBySeq = new Map<number, string>();
+        for (const [i, s] of draft.spots.entries()) {
+          const seq = i + 1;
+          const fields = {
+            seq,
+            name: s.name,
+            lat: s.lat,
+            lng: s.lng,
+            sigungu_code: s.sigunguCode,
+            kakao_place_id: s.kakaoPlaceId,
+          };
+          if (s.id) {
+            const { error: upError } = await supabase.from('spots').update(fields).eq('id', s.id);
+            if (upError) throw upError;
+            spotIdBySeq.set(seq, s.id);
+          } else {
+            const { data: inserted, error: insError } = await supabase
+              .from('spots')
+              .insert({ record_id: draft.recordId, ...fields })
+              .select('id')
+              .single();
+            if (insError) throw insError;
+            spotIdBySeq.set(seq, inserted.id as string);
+          }
+        }
 
-      const { error: delExpensesError } = await supabase
-        .from('expenses')
-        .delete()
-        .eq('record_id', draft.recordId);
-      if (delExpensesError) throw delExpensesError;
-      if (draft.expenses.length > 0) {
-        const { error: expensesError } = await supabase.from('expenses').insert(
-          draft.expenses.map((e) => ({
-            record_id: draft.recordId,
-            category: e.category,
-            amount: e.amount,
-            paid_by: e.paidBy,
-          })),
-        );
-        if (expensesError) throw expensesError;
+        const { error: delExpensesError } = await supabase
+          .from('expenses')
+          .delete()
+          .eq('record_id', draft.recordId);
+        if (delExpensesError) throw delExpensesError;
+        if (draft.expenses.length > 0) {
+          const { error: expensesError } = await supabase.from('expenses').insert(
+            draft.expenses.map((e) => ({
+              record_id: draft.recordId,
+              category: e.category,
+              amount: e.amount,
+              paid_by: e.paidBy,
+            })),
+          );
+          if (expensesError) throw expensesError;
+        }
+      } else {
+        throw rpcError;
       }
 
       // 수정 화면에서 뺀 기존 사진 삭제 (행 → 스토리지 원본)
@@ -364,23 +434,7 @@ export function useUpdateRecord(coupleId: string | undefined) {
           .from('record_photos')
           .select('id', { count: 'exact', head: true })
           .eq('record_id', draft.recordId);
-        const base = count ?? 0;
-        for (const [i, photo] of draft.photos.entries()) {
-          const blob = await prepareUpload(photo.file);
-          const path = `couples/${coupleId}/records/${draft.recordId}/${crypto.randomUUID()}.webp`;
-          const { error: uploadError } = await supabase.storage
-            .from('photos')
-            .upload(path, blob, { contentType: 'image/webp' });
-          if (uploadError) throw uploadError;
-          const { error: photoError } = await supabase.from('record_photos').insert({
-            record_id: draft.recordId,
-            storage_path: path,
-            seq: base + i,
-            spot_id:
-              photo.spotIndex !== null ? (spotIdBySeq.get(photo.spotIndex + 1) ?? null) : null,
-          });
-          if (photoError) throw photoError;
-        }
+        await uploadNewPhotos(coupleId, draft.recordId, draft.photos, spotIdBySeq, count ?? 0);
       }
       return draft;
     },
