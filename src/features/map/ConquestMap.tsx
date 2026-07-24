@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { paperColor, pinStyle } from '../../shared/lib/theme';
 import { useCoupleTheme } from '../couple/useCoupleState';
@@ -242,6 +242,19 @@ function useZoomPan(viewH: number) {
   }, []);
 
   const reset = useCallback(() => setVb({ x: 0, y: 0, w: VIEW_W }), []);
+
+  // 마우스 휠(데스크톱)·트랙패드 핀치 → 커서 기준 확대·축소 (실지도처럼). 손가락 핀치는 포인터로 처리.
+  // 네이티브 리스너 + passive:false 라야 preventDefault로 페이지 스크롤을 막고 지도만 줌한다.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoomAt(e.clientX, e.clientY, Math.pow(1.0016, e.deltaY));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [zoomAt]);
 
   return {
     svgRef,
