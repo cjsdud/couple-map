@@ -1,15 +1,49 @@
 # Phase 0 스파이크 결과
 
-상태: **문서 조사 완료 · 실기기 검증 대기** · 최종 업데이트: 2026-07-19
+상태: **샌드박스 실기기 검증 완료 (1~3 전부 통과)** · 최종 업데이트: 2026-07-25
 
 ## 요약
 
 | # | 검증 항목 | 방법 | 결과 |
 |---|---|---|---|
-| 1 | 앱인토스 WebView에서 Supabase 익명 쿼리 | Hello 도화지 페이지 (실기기) | 🟢 문서상 가능 (공식 Supabase 연동 가이드 존재) · 실기기 확인 대기 |
-| 2 | 앱인토스 WebView에서 Kakao Local REST | Hello 도화지 페이지 (실기기) | 🟡 문서상 외부 API 호출 가능 · 실기기 확인 대기 |
-| 3 | 앱인토스 WebView에서 geolocation 권한 | Hello 도화지 페이지 (실기기) | 🟡 표준 API 대신 **앱인토스 브릿지 API 필요** 가능성 높음 · 실기기 확인 대기 |
-| 4 | 앱인토스 로그인 정책 (토스 로그인 강제 여부) | 문서·웹 조사 | 🔴 **토스 로그인 강제 확정** — 카카오 OAuth 정책상 금지 → M0에 매핑 레이어 추가 |
+| 1 | 앱인토스 WebView에서 Supabase 익명 쿼리 | 샌드박스 실기기 | 🟢 **통과** (2026-07-25) — CORS·익명 쿼리 정상 |
+| 2 | 앱인토스 WebView에서 Kakao Local REST | 샌드박스 실기기 | 🟢 **통과** (2026-07-25) — 키워드 검색·coord2regioncode 모두 정상 |
+| 3 | 앱인토스 WebView에서 geolocation 권한 | 샌드박스 실기기 | 🟢 **통과** (2026-07-25) — 표준 `navigator.geolocation`으로 위치 획득(정확도 28m). **브릿지 API 불필요** |
+| 4 | 앱인토스 로그인 정책 (토스 로그인 강제 여부) | 문서·웹 조사 | 🔴 **토스 로그인 강제 확정** — 카카오 OAuth 정책상 금지 → M0에 매핑 레이어 추가. 추가로 **토스 로그인은 사업자 등록 필수**(2026-07-25 확인) |
+
+## 샌드박스 실기기 검증 결과 (2026-07-25)
+
+`dohwaji.ait` 업로드 → 샌드박스 설치 → 앱 내 '환경 진단' 진입으로 실행. 원본 결과:
+
+```
+Origin: https://dohwaji.private-apps.tossmini.com
+UA: AppsInToss TossApp/5.269.0 TossColorPreference/light TossFontAccessibility/Large TossFontScale/100 iPhone
+① Supabase 익명 쿼리: 성공 — 네트워크·CORS·익명 쿼리 성공 (1행 수신)
+② Kakao Local REST: 성공 — 키워드 검색 OK ("모모스커피 부산본점"),
+   coord2regioncode OK (서울특별시 서초구 서초2동, 코드 1165052000)
+③ 위치 권한: 성공 — 위치 획득 성공 (정확도 28m)
+④ 저장소 지속성: localStorage 쓰기·읽기 OK · 쿠키 동작 (재진입 확인 대기)
+```
+
+**판정: Phase 0 통과. 아키텍처를 흔들 변수는 없다.**
+
+확정된 사실:
+
+- **실행 Origin은 `https://dohwaji.private-apps.tossmini.com`** (운영은 `dohwaji.apps.tossmini.com`).
+  Vercel URL을 WebView가 로드하는 게 아니라 .ait 번들이 tossmini 도메인에서 서빙된다는 문서 내용이 실측으로 확인됐다.
+- **표준 `navigator.geolocation`이 동작한다.** 사전 조사에서 우려한 브릿지 API 강제는 사실이 아니었다
+  (`granite.config.ts`에 `geolocation` 권한만 선언하면 됨). "지금 여기" 기능을 웹 코드 그대로 쓸 수 있다.
+- **Kakao Local REST는 도메인 등록 없이 통과**했다 (REST 키는 `Authorization: KakaoAK` 헤더 인증이라 referrer 검사 없음).
+  ⚠️ 단, **실지도 모드가 쓰는 Kakao Maps JS SDK는 사이트 도메인 검사가 있다** — 이번 진단에 포함되지 않았다.
+  Kakao Developers 플랫폼(Web)에 위 두 tossmini 도메인 등록 필요.
+- UA에 `TossFontScale`·`TossFontAccessibility`가 실려 온다 — 접근성 글자 크기 대응 여지 (후속 확인 항목).
+
+### 미해결 (후속)
+
+- ④ 저장소 지속성의 **재진입 확인**: 미니앱 완전 종료 후 재실행 시 이전 스탬프가 남는지 (= Supabase 세션 유지).
+- **상대 경로 서버 함수 문제**: `/api/kakao-login`·`/api/id-login`은 tossmini 도메인에 존재하지 않아 404가 난다.
+  앱인토스 채널은 토스 로그인을 쓰므로 이 두 개는 불필요하지만, **토스 로그인 토큰 교환 엔드포인트도 같은 제약**을 받는다
+  → API 베이스 URL을 절대 경로(Vercel)로 뽑고 해당 함수에 tossmini Origin CORS 허용을 추가해야 한다.
 
 ## 1~3. Hello 도화지 진단 페이지
 
