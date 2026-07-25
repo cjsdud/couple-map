@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { KAKAO_JS_KEY, loadKakaoMaps } from '../../shared/lib/kakaoMap';
 
 /**
  * Phase 0 스파이크 — "Hello 도화지"
@@ -160,11 +161,48 @@ async function checkStorage(): Promise<CheckResult> {
   };
 }
 
+/**
+ * ⑤ Kakao Maps JS SDK — REST(②)와 달리 **사이트 도메인 검사**가 있다.
+ * Kakao Developers 플랫폼(Web)에 실행 Origin이 등록돼 있지 않으면 여기서만 실패한다.
+ * 실지도 모드의 동작 여부가 이 항목에 달려 있다.
+ */
+async function checkKakaoSdk(): Promise<CheckResult> {
+  if (!KAKAO_JS_KEY) {
+    return { status: 'unset', detail: 'VITE_KAKAO_JS_KEY 환경변수가 설정되지 않았어요.' };
+  }
+  try {
+    await Promise.race([
+      loadKakaoMaps(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('10초 안에 응답 없음')), 10000)),
+    ]);
+  } catch (e) {
+    return {
+      status: 'fail',
+      detail: `SDK 로드 실패 — Kakao Developers 플랫폼(Web) 사이트 도메인에 "${window.location.origin}"이 등록됐는지 확인해 주세요. (${String(e)})`,
+    };
+  }
+  // 로드만으로는 부족 — 실제 지도 객체를 만들어봐야 도메인 거부가 드러난다
+  try {
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;left:-9999px;width:200px;height:200px';
+    document.body.appendChild(probe);
+    new window.kakao.maps.Map(probe, {
+      center: new window.kakao.maps.LatLng(37.5665, 126.978),
+      level: 5,
+    });
+    probe.remove();
+    return { status: 'ok', detail: '지도 SDK 로드·지도 생성 성공. 실지도 모드 사용 가능.' };
+  } catch (e) {
+    return { status: 'warn', detail: `SDK는 받았지만 지도 생성 실패 (${String(e)}).` };
+  }
+}
+
 const CHECKS = [
   { key: 'supabase', title: '① Supabase 익명 쿼리', run: checkSupabase },
   { key: 'kakao', title: '② Kakao Local REST', run: checkKakao },
   { key: 'geo', title: '③ 위치 권한 (geolocation)', run: checkGeolocation },
   { key: 'storage', title: '④ 저장소 지속성 (재진입)', run: checkStorage },
+  { key: 'kakaoSdk', title: '⑤ Kakao 지도 SDK (도메인 검사)', run: checkKakaoSdk },
 ] as const;
 
 type CheckKey = (typeof CHECKS)[number]['key'];
@@ -183,6 +221,7 @@ export default function SpikePage() {
     kakao: { status: 'running', detail: '' },
     geo: { status: 'running', detail: '' },
     storage: { status: 'running', detail: '' },
+    kakaoSdk: { status: 'running', detail: '' },
   });
   const [copied, setCopied] = useState(false);
 
