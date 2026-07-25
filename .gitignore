@@ -7,3 +7,6 @@ dist/
 *.tsbuildinfo
 .DS_Store
 .vercel/
+
+# 앱인토스 빌드 산출물 (5MB+, 콘솔 업로드용 — 매 빌드마다 재생성)
+*.ait

@@ -1,0 +1,21 @@
+{
+  "appName": "dohwaji",
+  "permissions": [
+    {
+      "name": "geolocation",
+      "access": "access"
+    },
+    {
+      "name": "photos",
+      "access": "read"
+    },
+    {
+      "name": "camera",
+      "access": "access"
+    },
+    {
+      "name": "clipboard",
+      "access": "write"
+    }
+  ]
+}

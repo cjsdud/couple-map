@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ait:build": "ait build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",
@@ -19,6 +20,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@apps-in-toss/web-framework": "^2.10.7",
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.1.0",
     "@types/react": "^18.3.12",
