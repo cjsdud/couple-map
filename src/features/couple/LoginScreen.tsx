@@ -59,9 +59,22 @@ export default function LoginScreen() {
 
       <div className="space-y-1 pb-2 text-center text-xs opacity-45">
         <p>앱인토스에서는 토스 로그인으로 이용하게 돼요</p>
-        <a href="/privacy.html" className="underline underline-offset-2">
-          개인정보 처리방침
-        </a>
+        <div className="flex items-center justify-center gap-3">
+          <a href="/privacy.html" className="underline underline-offset-2">
+            개인정보 처리방침
+          </a>
+          {/* Phase 0 전용 — 미니앱 WebView엔 주소창이 없어 진단 페이지 진입로가 필요하다.
+              샌드박스 검증이 끝나면 이 버튼과 SpikePage를 함께 제거한다. */}
+          <button
+            type="button"
+            onClick={() => {
+              window.location.hash = '#/spike';
+            }}
+            className="underline underline-offset-2"
+          >
+            환경 진단
+          </button>
+        </div>
       </div>
     </main>
   );

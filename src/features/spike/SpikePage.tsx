@@ -272,9 +272,19 @@ export default function SpikePage() {
         />
       </section>
 
-      <footer className="space-y-1 text-xs opacity-60">
+      <footer className="space-y-3 text-xs opacity-60">
         <p>복사가 안 되면 위 상자의 내용을 길게 눌러 선택·복사하거나, 화면을 캡처해 주세요.</p>
         <p>앱인토스 샌드박스와 일반 브라우저에서 각각 한 번씩 실행하면 비교가 됩니다.</p>
+        {/* 미니앱 WebView엔 뒤로가기 주소창이 없다 — 앱으로 돌아갈 길을 남긴다 */}
+        <button
+          type="button"
+          onClick={() => {
+            window.location.hash = '';
+          }}
+          className="rounded-full border border-ink/25 px-4 py-1.5 font-semibold active:bg-ink/10"
+        >
+          ← 도화지로 돌아가기
+        </button>
       </footer>
     </main>
   );
