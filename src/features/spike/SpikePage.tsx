@@ -2,11 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 
 /**
  * Phase 0 스파이크 — "Hello 도화지"
- * 앱인토스 샌드박스 WebView 안에서 아키텍처의 전제 3가지가 동작하는지 진단한다:
+ * 앱인토스 샌드박스 WebView 안에서 아키텍처의 전제가 동작하는지 진단한다:
  *   ① Supabase REST 익명 쿼리 (외부 API 네트워크 경로 + CORS)
  *   ② Kakao Local REST (키워드 검색 + coord2regioncode)
  *   ③ navigator.geolocation 권한 요청
- * 결과 화면을 캡처해 docs/spike-result.md에 기록한다.
+ *   ④ 저장소 지속성 (미니앱 재진입 시 Supabase 세션이 살아남는지)
+ * 실행 Origin은 CORS·플랫폼 도메인 등록값이 되므로 화면 맨 위에 크게 띄운다
+ * (샌드박스는 Vercel URL이 아니라 dohwaji.private-apps.tossmini.com에서 서빙됨).
+ * 결과를 복사해 docs/spike-result.md에 기록한다.
  */
 
 type Status = 'unset' | 'running' | 'ok' | 'warn' | 'fail';
@@ -15,6 +18,16 @@ interface CheckResult {
   status: Status;
   detail: string;
 }
+
+/** 재진입 판정용 스탬프 — '다시 실행'이 방금 쓴 값을 이전 방문으로 오인하지 않도록 모듈 로드 시 1회만 읽는다 */
+const STAMP_KEY = 'dohwaji-spike-stamp';
+const PRIOR_STAMP = (() => {
+  try {
+    return localStorage.getItem(STAMP_KEY);
+  } catch {
+    return null;
+  }
+})();
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -109,10 +122,49 @@ function checkGeolocation(): Promise<CheckResult> {
   });
 }
 
+/**
+ * ④ 저장소 지속성 — Supabase 세션은 localStorage에 저장되므로,
+ * 미니앱을 닫았다 다시 열었을 때 값이 남아야 "재진입 시 로그인 유지"가 성립한다.
+ */
+async function checkStorage(): Promise<CheckResult> {
+  const now = Date.now();
+  let local: string;
+  try {
+    localStorage.setItem(STAMP_KEY, String(now));
+    local = localStorage.getItem(STAMP_KEY) === String(now) ? '쓰기·읽기 OK' : '쓴 값이 되읽히지 않음';
+  } catch (e) {
+    return {
+      status: 'fail',
+      detail: `localStorage 사용 불가 — 이 WebView에서는 로그인 유지가 안 돼요. 세션 저장 방식을 바꿔야 합니다. (${String(e)})`,
+    };
+  }
+
+  let cookie = '차단됨';
+  try {
+    document.cookie = `${STAMP_KEY}=${now}; path=/; max-age=86400; SameSite=Lax`;
+    if (document.cookie.includes(STAMP_KEY)) cookie = '동작';
+  } catch {
+    // 쿠키는 보조 지표 — 실패해도 localStorage가 되면 세션 유지에는 문제없다
+  }
+
+  if (!PRIOR_STAMP) {
+    return {
+      status: 'warn',
+      detail: `localStorage ${local} · 쿠키 ${cookie}. 아직 이전 방문 기록이 없어요 — 미니앱을 완전히 닫았다가 다시 열어 이 항목을 확인해 주세요 (그때 '성공'으로 바뀌면 재진입 유지 OK).`,
+    };
+  }
+  const minutes = Math.round((now - Number(PRIOR_STAMP)) / 60000);
+  return {
+    status: 'ok',
+    detail: `localStorage ${local} · 쿠키 ${cookie}. 이전 방문 기록이 살아 있어요 (${minutes}분 전). 재진입해도 Supabase 세션이 유지됩니다.`,
+  };
+}
+
 const CHECKS = [
   { key: 'supabase', title: '① Supabase 익명 쿼리', run: checkSupabase },
   { key: 'kakao', title: '② Kakao Local REST', run: checkKakao },
   { key: 'geo', title: '③ 위치 권한 (geolocation)', run: checkGeolocation },
+  { key: 'storage', title: '④ 저장소 지속성 (재진입)', run: checkStorage },
 ] as const;
 
 type CheckKey = (typeof CHECKS)[number]['key'];
@@ -130,7 +182,9 @@ export default function SpikePage() {
     supabase: { status: 'running', detail: '' },
     kakao: { status: 'running', detail: '' },
     geo: { status: 'running', detail: '' },
+    storage: { status: 'running', detail: '' },
   });
+  const [copied, setCopied] = useState(false);
 
   const runOne = useCallback(async (key: CheckKey) => {
     setResults((r) => ({ ...r, [key]: { status: 'running', detail: '' } }));
@@ -143,6 +197,22 @@ export default function SpikePage() {
     CHECKS.forEach((c) => void runOne(c.key));
   }, [runOne]);
 
+  // 캡처 대신 텍스트로 넘길 수 있게 — WebView에서는 스크린샷 공유가 번거롭다
+  const report = [
+    `[도화지 스파이크 결과]`,
+    `Origin: ${window.location.origin}`,
+    `URL: ${window.location.href}`,
+    `UA: ${navigator.userAgent}`,
+    ...CHECKS.map((c) => `${c.title}: ${STATUS_UI[results[c.key].status].label} — ${results[c.key].detail}`),
+  ].join('\n');
+
+  const copyReport = () => {
+    void navigator.clipboard
+      ?.writeText(report)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+  };
+
   return (
     <main className="mx-auto max-w-md px-4 py-8 space-y-6">
       <header className="space-y-1">
@@ -151,6 +221,16 @@ export default function SpikePage() {
         </h1>
         <p className="text-sm opacity-70">Phase 0 스파이크 — 앱인토스 WebView 환경 진단</p>
       </header>
+
+      {/* Origin은 Supabase CORS·카카오 플랫폼 도메인에 등록할 값 — 샌드박스에서 제일 먼저 확인한다 */}
+      <section className="rounded-2xl rounded-tl-md border-2 border-sky/60 bg-sky/10 p-4 space-y-1">
+        <h2 className="text-sm font-bold">실행 위치 (Origin)</h2>
+        <p className="break-all font-mono text-sm font-bold">{window.location.origin}</p>
+        <p className="text-xs leading-relaxed opacity-70">
+          이 주소를 Supabase 허용 도메인과 카카오 플랫폼에 등록해야 해요. 샌드박스라면{' '}
+          <span className="font-mono">dohwaji.private-apps.tossmini.com</span> 형태여야 정상이에요.
+        </p>
+      </section>
 
       {CHECKS.map((c) => {
         const r = results[c.key];
@@ -176,9 +256,25 @@ export default function SpikePage() {
         );
       })}
 
+      <section className="space-y-2">
+        <button
+          type="button"
+          onClick={copyReport}
+          className="w-full rounded-2xl rounded-tl-md bg-pink py-3 text-sm font-bold text-white active:translate-y-px"
+        >
+          {copied ? '복사됐어요 — 붙여넣어 공유해 주세요' : '결과 전체 복사하기'}
+        </button>
+        <textarea
+          readOnly
+          value={report}
+          rows={6}
+          className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 p-3 font-mono text-[11px] leading-relaxed"
+        />
+      </section>
+
       <footer className="space-y-1 text-xs opacity-60">
-        <p>이 화면을 캡처해서 공유해 주세요. (앱인토스 샌드박스 / 일반 브라우저 각각)</p>
-        <p className="break-all">UA: {navigator.userAgent}</p>
+        <p>복사가 안 되면 위 상자의 내용을 길게 눌러 선택·복사하거나, 화면을 캡처해 주세요.</p>
+        <p>앱인토스 샌드박스와 일반 브라우저에서 각각 한 번씩 실행하면 비교가 됩니다.</p>
       </footer>
     </main>
   );
