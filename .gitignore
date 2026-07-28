@@ -10,3 +10,18 @@ dist/
 
 # 앱인토스 빌드 산출물 (5MB+, 콘솔 업로드용 — 매 빌드마다 재생성)
 *.ait
+
+# Capacitor 네이티브 — cap sync가 다시 만드는 산출물 (원본은 dist/와 설정 파일)
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/upload-keystore.jks
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/App/Pods/
+ios/App/build/
+ios/DerivedData/

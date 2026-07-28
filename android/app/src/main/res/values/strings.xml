@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">우리의 도화지</string>
+    <string name="title_activity_main">우리의 도화지</string>
+    <string name="package_name">app.dohwaji.couple</string>
+    <string name="custom_url_scheme">app.dohwaji.couple</string>
+</resources>

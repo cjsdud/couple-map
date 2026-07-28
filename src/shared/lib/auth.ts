@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { apiUrl } from './apiBase';
+import { isNativeApp, NATIVE_KAKAO_REDIRECT } from './native';
 import { supabase } from './supabase';
 
 /**
@@ -10,31 +12,67 @@ export const KAKAO_CALLBACK_PATH = '/kakao';
 const KAKAO_NICKNAME_KEY = 'dohwaji:kakaoNickname';
 
 /**
+ * 카카오가 돌아올 주소.
+ * 웹은 같은 출처의 /kakao로 되돌아오면 되지만, 네이티브 셸은 출처가 앱 내부(localhost)라
+ * 카카오가 되돌려 보낼 수 없다 → 커스텀 스킴(dohwaji://kakao)으로 앱을 깨운다.
+ */
+export function kakaoRedirectUri(): string {
+  return isNativeApp() ? NATIVE_KAKAO_REDIRECT : window.location.origin + KAKAO_CALLBACK_PATH;
+}
+
+/**
  * 카카오 로그인 — Supabase 내장 provider 대신 자체 교환 (api/kakao-login.ts).
  * 내장 provider는 account_email scope를 강제하는데 이메일 동의항목이 비즈 앱 전용이라
  * 개인 앱에서 KOE205로 막힌다. 닉네임 scope만 요청해 인가 코드를 받고,
  * Vercel 함수가 토큰 교환·계정 매핑 후 준 일회용 자격으로 세션을 만든다.
  */
-export function signInWithKakao() {
+export async function signInWithKakao() {
   const key = import.meta.env.VITE_KAKAO_REST_KEY as string | undefined;
-  if (!supabase || !key) return Promise.resolve();
+  if (!supabase || !key) return;
   const params = new URLSearchParams({
     client_id: key,
-    redirect_uri: window.location.origin + KAKAO_CALLBACK_PATH,
+    redirect_uri: kakaoRedirectUri(),
     response_type: 'code',
     scope: 'profile_nickname',
   });
-  window.location.href = `https://kauth.kakao.com/oauth/authorize?${params.toString()}`;
-  return Promise.resolve();
+  const authorizeUrl = `https://kauth.kakao.com/oauth/authorize?${params.toString()}`;
+
+  if (isNativeApp()) {
+    // 앱 화면을 떠나지 않고 시스템 브라우저를 띄운다 — 복귀는 appUrlOpen(listenKakaoRedirect)
+    const { Browser } = await import('@capacitor/browser');
+    await Browser.open({ url: authorizeUrl });
+    return;
+  }
+  window.location.href = authorizeUrl;
+}
+
+/**
+ * 네이티브 셸에서 카카오 복귀(dohwaji://kakao?code=...)를 받아 로그인을 마친다.
+ * main.tsx에서 앱 시작 시 한 번 등록한다. 웹에서는 아무 일도 하지 않는다.
+ */
+export async function listenKakaoRedirect(): Promise<void> {
+  if (!isNativeApp()) return;
+  const [{ App }, { Browser }] = await Promise.all([
+    import('@capacitor/app'),
+    import('@capacitor/browser'),
+  ]);
+  await App.addListener('appUrlOpen', ({ url }) => {
+    if (!url.startsWith(NATIVE_KAKAO_REDIRECT)) return;
+    const code = new URL(url).searchParams.get('code');
+    void Browser.close().catch(() => {
+      // 이미 닫혔으면 무시
+    });
+    if (code) void completeKakaoLogin(code);
+  });
 }
 
 /** 카카오 리다이렉트 복귀 처리: 인가 코드 → 자체 계정 세션. 성공 시 true. */
 export async function completeKakaoLogin(code: string): Promise<boolean> {
   if (!supabase) return false;
-  const res = await fetch('/api/kakao-login', {
+  const res = await fetch(apiUrl('/api/kakao-login'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code, redirectUri: window.location.origin + KAKAO_CALLBACK_PATH }),
+    body: JSON.stringify({ code, redirectUri: kakaoRedirectUri() }),
   });
   if (!res.ok) return false;
   const { email, password, nickname } = (await res.json()) as {

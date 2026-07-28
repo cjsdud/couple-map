@@ -6,10 +6,17 @@
  * Vercel에만 있으니 같은 출처가 아닐 때는 절대 주소로 부른다.
  * (해당 함수들은 tossmini/vercel 출처에 대해 CORS를 허용한다.)
  */
+import { isNativeApp } from './native';
+
 const VERCEL_ORIGIN = 'https://couple-map-azure.vercel.app';
 
-/** 서버 함수가 우리 출처에 있는가 — 웹·프리뷰·로컬 개발은 전부 같은 출처 */
+/**
+ * 서버 함수가 우리 출처에 있는가.
+ * 웹·프리뷰·로컬 개발은 같은 출처지만, 네이티브 셸은 출처가 localhost여도
+ * 그 localhost가 앱 내부 파일 서버라 Vercel 함수가 없다 → 절대 주소로 보내야 한다.
+ */
 function isSameOriginApi(): boolean {
+  if (isNativeApp()) return false;
   const host = window.location.hostname;
   return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.vercel.app');
 }
