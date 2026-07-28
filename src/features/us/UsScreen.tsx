@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { signOut, useSession } from '../../shared/lib/auth';
+import { useIssueLinkCode } from '../couple/accountLink';
 import { calcStreak, entryDateFor, toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
 import {
@@ -470,6 +471,7 @@ function SettingsCard({
       </label>
 
       {/* '데이트 비용 나누기' 설정은 제거 — 낸 사람은 지출 입력 때 이미 고르므로 (사용자 결정 2026-07-23) */}
+      {supabase && <LinkCodeCard disabled={disabled} />}
       {supabase && (
         <button
           type="button"
@@ -487,5 +489,41 @@ function SettingsCard({
         개인정보 처리방침
       </a>
     </section>
+  );
+}
+
+/**
+ * 계정 이어가기 코드 — 토스 버전과 스토어·웹 버전은 로그인 수단이 달라 계정이 따로 생긴다.
+ * 여기서 만든 6자리를 새 기기의 첫 화면에 넣으면 이 계정으로 합쳐진다 (0014_account_link.sql).
+ */
+function LinkCodeCard({ disabled }: { disabled: boolean }) {
+  const issue = useIssueLinkCode();
+  const code = issue.data;
+
+  return (
+    <div className="space-y-2 border-t border-ink/10 pt-4">
+      <p className="text-sm font-semibold">계정 이어가기</p>
+      <p className="text-xs leading-relaxed opacity-55">
+        토스 앱과 스토어 앱은 로그인 방식이 달라 계정이 따로 만들어져요. 코드를 만들어 새 앱의
+        첫 화면에 넣으면 지금 이 계정으로 이어져요.
+      </p>
+      {code ? (
+        <div className="rounded-2xl rounded-tl-md border-2 border-pink/40 bg-pink/5 px-4 py-3 text-center">
+          <p className="text-2xl font-bold tracking-[0.3em]">{code.code}</p>
+          <p className="mt-1 text-xs opacity-55">10분 안에 새 앱에서 입력해 주세요</p>
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => {
+          if (!issue.isPending) issue.mutate();
+        }}
+        disabled={disabled || issue.isPending}
+        className="w-full rounded-2xl rounded-br-md border-2 border-ink/15 bg-white/70 py-2.5 text-sm font-semibold active:translate-y-px disabled:opacity-40"
+      >
+        {issue.isPending ? '만드는 중…' : code ? '새 코드 만들기' : '이어가기 코드 만들기'}
+      </button>
+      {issue.isError && <p className="text-xs text-pink">코드를 만들지 못했어요. 다시 시도해 주세요</p>}
+    </div>
   );
 }
