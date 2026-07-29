@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { apiUrl } from './apiBase';
-import { isNativeApp, NATIVE_KAKAO_REDIRECT } from './native';
+import { isNativeApp, NATIVE_KAKAO_REDIRECT, NATIVE_KAKAO_SCHEME } from './native';
 import { supabase } from './supabase';
 
 /**
@@ -13,8 +13,9 @@ const KAKAO_NICKNAME_KEY = 'dohwaji:kakaoNickname';
 
 /**
  * 카카오가 돌아올 주소.
- * 웹은 같은 출처의 /kakao로 되돌아오면 되지만, 네이티브 셸은 출처가 앱 내부(localhost)라
- * 카카오가 되돌려 보낼 수 없다 → 커스텀 스킴(dohwaji://kakao)으로 앱을 깨운다.
+ * 웹은 같은 출처의 /kakao로 되돌아온다. 네이티브 셸은 출처가 앱 내부(localhost)라
+ * 카카오가 되돌려 보낼 수 없는데, 카카오는 리다이렉트 URI에 http(s)만 받으므로
+ * 커스텀 스킴을 직접 등록할 수도 없다 → https 중계 페이지(/kakao-app)를 거쳐 앱을 깨운다.
  */
 export function kakaoRedirectUri(): string {
   return isNativeApp() ? NATIVE_KAKAO_REDIRECT : window.location.origin + KAKAO_CALLBACK_PATH;
@@ -57,7 +58,7 @@ export async function listenKakaoRedirect(): Promise<void> {
     import('@capacitor/browser'),
   ]);
   await App.addListener('appUrlOpen', ({ url }) => {
-    if (!url.startsWith(NATIVE_KAKAO_REDIRECT)) return;
+    if (!url.startsWith(NATIVE_KAKAO_SCHEME)) return;
     const code = new URL(url).searchParams.get('code');
     void Browser.close().catch(() => {
       // 이미 닫혔으면 무시

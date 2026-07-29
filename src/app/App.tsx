@@ -9,6 +9,7 @@ import {
   useCoupleState,
 } from '../features/couple/useCoupleState';
 import { completeKakaoLogin, KAKAO_CALLBACK_PATH, useSession } from '../shared/lib/auth';
+import { KAKAO_APP_BRIDGE_PATH, NATIVE_KAKAO_SCHEME } from '../shared/lib/native';
 import { supabase } from '../shared/lib/supabase';
 import AppShell from './AppShell';
 
@@ -30,6 +31,35 @@ function Splash({ label = '도화지를 펼치는 중…' }: { label?: string })
   return (
     <div className="flex min-h-dvh items-center justify-center text-sm opacity-50">
       {label}
+    </div>
+  );
+}
+
+/**
+ * 네이티브 앱용 중계 페이지(/kakao-app?code=…).
+ * 카카오가 커스텀 스킴을 리다이렉트 URI로 받아주지 않아, https로 한 번 받은 뒤
+ * `dohwaji://kakao?code=…`로 앱을 깨운다. 앱이 없으면 안내만 남는다.
+ */
+function KakaoAppBridge() {
+  const [code] = useState(() => new URLSearchParams(window.location.search).get('code'));
+  useEffect(() => {
+    if (!code) return;
+    window.location.replace(`${NATIVE_KAKAO_SCHEME}?code=${encodeURIComponent(code)}`);
+  }, [code]);
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 px-6 text-center">
+      <p className="text-3xl" aria-hidden>🎨</p>
+      <p className="text-sm opacity-70">
+        {code ? '앱으로 돌아가는 중…' : '로그인이 중간에 끊겼어요. 앱에서 다시 시도해 주세요.'}
+      </p>
+      {code && (
+        <a
+          href={`${NATIVE_KAKAO_SCHEME}?code=${encodeURIComponent(code)}`}
+          className="rounded-2xl rounded-tl-md bg-pink px-5 py-2.5 text-sm font-bold text-white"
+        >
+          앱으로 돌아가기
+        </a>
+      )}
     </div>
   );
 }
@@ -122,6 +152,9 @@ function Gate() {
 
 export default function App() {
   const hash = useHashRoute();
+  if (window.location.pathname === KAKAO_APP_BRIDGE_PATH) {
+    return <KakaoAppBridge />;
+  }
   if (window.location.pathname === KAKAO_CALLBACK_PATH) {
     return <KakaoCallback />;
   }

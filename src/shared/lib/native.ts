@@ -35,5 +35,15 @@ export function isAppsInToss(): boolean {
   );
 }
 
-/** 네이티브 셸에서 카카오가 돌아올 커스텀 스킴 (Kakao Developers Redirect URI에 등록) */
-export const NATIVE_KAKAO_REDIRECT = 'dohwaji://kakao';
+/**
+ * 네이티브 로그인 복귀 경로.
+ *
+ * 카카오는 리다이렉트 URI에 http(s)만 받는다 (`dohwaji://kakao`는 "유효하지 않은 URL"로 거부됨).
+ * 그래서 https 중계 페이지를 한 번 거친다:
+ *   카카오 → https://…/kakao-app?code=… (브라우저) → dohwaji://kakao?code=… (앱)
+ * 앱이 깨어나면 appUrlOpen이 코드를 받아 로그인을 마친다.
+ */
+export const KAKAO_APP_BRIDGE_PATH = '/kakao-app';
+export const NATIVE_KAKAO_REDIRECT = `https://couple-map-azure.vercel.app${KAKAO_APP_BRIDGE_PATH}`;
+/** 중계 페이지가 앱을 깨울 때 쓰는 커스텀 스킴 (네이티브 프로젝트에 선언돼 있다) */
+export const NATIVE_KAKAO_SCHEME = 'dohwaji://kakao';

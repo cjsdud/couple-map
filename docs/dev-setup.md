@@ -113,7 +113,8 @@ gradlew assembleDebug        # 하모니카는 ./gradlew assembleDebug
 `npx cap sync android`까지 했는지 확인. 웹 빌드 결과물이 앱 안으로 복사돼야 한다.
 
 **카카오 로그인이 안 된다** — Kakao Developers → 카카오 로그인 → Redirect URI에
-`dohwaji://kakao`가 등록돼 있어야 한다 (네이티브 앱은 이 주소로 돌아온다).
+`https://couple-map-azure.vercel.app/kakao-app`이 등록돼 있어야 한다.
+(카카오는 http(s)만 받아서 커스텀 스킴을 직접 못 넣는다. 이 https 페이지가 앱을 깨우는 중계 역할.)
 
 **지도(실지도)가 안 뜬다** — `VITE_KAKAO_JS_KEY`가 `.env.local`에 있는지,
 그리고 Kakao Developers 플랫폼(Web) 사이트 도메인 등록을 확인.
