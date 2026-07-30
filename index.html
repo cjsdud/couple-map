@@ -10,6 +10,24 @@
     <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- 아이폰 '홈 화면에 추가' — 주소창 없이 전체화면으로 뜨고 상태바를 종이색에 맞춘다.
+         맥 없이 iOS 앱을 낼 수 없는 동안 이 PWA가 아이폰 사용자의 앱 역할을 한다. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="도화지" />
+    <!-- 실행 화면 — 없으면 켤 때 흰 화면이 번쩍인다 (기기별 해상도로 골라 쓴다) -->
+    <link rel="apple-touch-startup-image" href="/icons/splash/splash-1290x2796.png"
+      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" />
+    <link rel="apple-touch-startup-image" href="/icons/splash/splash-1179x2556.png"
+      media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" />
+    <link rel="apple-touch-startup-image" href="/icons/splash/splash-1284x2778.png"
+      media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" />
+    <link rel="apple-touch-startup-image" href="/icons/splash/splash-1170x2532.png"
+      media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" />
+    <link rel="apple-touch-startup-image" href="/icons/splash/splash-1125x2436.png"
+      media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" />
+    <link rel="apple-touch-startup-image" href="/icons/splash/splash-828x1792.png"
+      media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)" />
     <!-- 카톡·SNS 링크 미리보기 (초대 링크의 첫인상) — 커스텀 도메인 생기면 URL 교체 -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="우리의 도화지" />
