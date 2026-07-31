@@ -551,7 +551,7 @@ function LinkCodeCard({ disabled }: { disabled: boolean }) {
     <div className="space-y-2 border-t border-ink/10 pt-4">
       <p className="text-sm font-semibold">계정 이어가기</p>
       <p className="text-xs leading-relaxed opacity-55">
-        토스 앱과 스토어 앱은 로그인 방식이 달라 계정이 따로 만들어져요. 코드를 만들어 새 앱의
+        다른 기기나 다른 로그인으로 들어가면 계정이 따로 만들어질 수 있어요. 코드를 만들어 그쪽
         첫 화면에 넣으면 지금 이 계정으로 이어져요.
       </p>
       {code ? (

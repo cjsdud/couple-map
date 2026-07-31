@@ -11,6 +11,7 @@ import {
 import { completeKakaoLogin, KAKAO_CALLBACK_PATH, useSession } from '../shared/lib/auth';
 import { KAKAO_APP_BRIDGE_PATH, NATIVE_KAKAO_SCHEME } from '../shared/lib/native';
 import { supabase } from '../shared/lib/supabase';
+import UpdatePrompt from '../shared/ui/UpdatePrompt';
 import AppShell from './AppShell';
 
 const queryClient = new QueryClient({
@@ -154,6 +155,8 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Gate />
+      {/* 서비스 워커가 예전 화면을 계속 보여주지 않도록 새 버전 안내 */}
+      <UpdatePrompt />
     </QueryClientProvider>
   );
 }

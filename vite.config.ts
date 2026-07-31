@@ -13,7 +13,9 @@ export default defineConfig({
      * manifest는 public/manifest.webmanifest를 그대로 쓴다 (iOS가 이미 참조 중 — 중복 생성 방지).
      */
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
+      // 등록은 앱 코드(UpdatePrompt)가 직접 한다 — 새 버전 알림을 띄우기 위해
+      injectRegister: null,
       manifest: false,
       workbox: {
         // 알림 수신·클릭 동작은 별도 파일이 맡는다 (생성되는 sw.js는 캐싱 전담)
