@@ -275,7 +275,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
                     pins: mapPins,
                     focus: 'all',
                     regionNames,
-                    badge: `대한민국 ${(conquest.ratio * 100).toFixed(1)}% 정복`,
+                    stickers: { conquest: conquest.ratio },
                     caption: typed || null,
                   })
                 : paintRecapCard(canvas, card)

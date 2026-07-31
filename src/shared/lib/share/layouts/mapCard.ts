@@ -5,9 +5,18 @@
  * "우리가 칠한 곳"이라는 이 앱의 정체성이 곧 카드가 된다.
  */
 import { loadShareFonts } from '../../shareFonts';
-import { fitLines, heartDoodle, paintGrain, paintHeaderDeco, paintRegionHashtags, paintWatermark, roundRect, wrapText } from '../draw';
+import {
+  fitLines,
+  heartDoodle,
+  paintGrain,
+  paintHeaderDeco,
+  paintRegionHashtags,
+  paintWatermark,
+  wrapText,
+} from '../draw';
 import { paintMap, type MapPin } from '../mapPaint';
 import { createPainter } from '../painter';
+import { stickerRow, stickerTexts, type CardStickers } from '../stickers';
 import type { Painter, ShareRatio, ShareTheme } from '../types';
 
 export interface MapCardData {
@@ -25,6 +34,8 @@ export interface MapCardData {
   regionNames: string[];
   /** 지도 아래 뱃지 — '대한민국 6.5% 정복' 같은 한 줄 */
   badge?: string | null;
+  /** 뱃지 옆에 함께 붙는 스티커 (계획 §5) */
+  stickers?: CardStickers;
   caption?: string | null;
 }
 
@@ -60,7 +71,10 @@ export async function paintMapCard(canvas: HTMLCanvasElement, data: MapCardData)
   }
 
   const caption = data.caption?.trim();
-  const badge = data.badge?.trim();
+  const badges = [data.badge?.trim(), ...stickerTexts(data.stickers, 2)].filter(
+    (t): t is string => Boolean(t),
+  );
+  const badge = badges.length > 0;
   // 아래에서부터 자리를 빼 지도 높이를 정한다 — 아래 요소가 늘어도 겹치지 않게
   const bottom = 1350 - 96 - (data.regionNames.length ? 44 : 0) - (caption ? 74 : 0) - (badge ? 92 : 0);
   const box = { x: 60, y: mapTop, w: 960, h: Math.max(360, bottom - mapTop) };
@@ -76,18 +90,9 @@ export async function paintMapCard(canvas: HTMLCanvasElement, data: MapCardData)
     heartDoodle(p, 540, box.y + box.h / 2, 300, accent);
   }
 
-  let y = box.y + box.h + 62;
+  let y = box.y + box.h + 56;
   if (badge) {
-    ctx.font = p.font(skin.body, 34, 700);
-    const tw = ctx.measureText(badge).width;
-    const pillW = tw + p.x(56);
-    const pillH = p.vh(62);
-    roundRect(ctx, p.W / 2 - pillW / 2, p.y(y) - pillH * 0.72, pillW, pillH, pillH / 2);
-    ctx.fillStyle = skin.badgeBg;
-    ctx.fill();
-    ctx.fillStyle = skin.badgeInk;
-    ctx.textAlign = 'center';
-    ctx.fillText(badge, p.W / 2, p.y(y) + p.vh(10));
+    stickerRow(p, badges, y);
     y += 74;
   }
   if (caption) {

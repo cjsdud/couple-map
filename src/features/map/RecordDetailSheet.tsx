@@ -6,6 +6,9 @@ import {
   paintRecordCard,
   type ShareTheme,
 } from '../../shared/lib/shareCard';
+import { ddayFrom } from '../../shared/lib/share/stickers';
+import { useSession } from '../../shared/lib/auth';
+import { useCoupleState } from '../couple/useCoupleState';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
 import ShareCardSheet from '../../shared/ui/ShareCardSheet';
@@ -113,6 +116,9 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
   const sigunguNames = useSigunguNames(record !== null).data ?? {};
   // 지도 카드는 커플의 정복 현황 위에 이 날의 코스를 얹는다
   const conquest = useConquest();
+  // 스티커(D+n)용 커플 시작일
+  const { session } = useSession();
+  const startedAt = useCoupleState(session?.user.id).data?.couple?.started_at ?? null;
 
   const close = () => {
     markVisited.reset();
@@ -131,6 +137,21 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
   const mapPins = spots
     .filter((s) => s.lat !== null && s.lng !== null)
     .map((s) => ({ lng: s.lng as number, lat: s.lat as number, label: s.name }));
+  // 이 동네가 몇 번째인지 — 같은 시군구를 다녀온 기록을 날짜순으로 세어 순번을 매긴다
+  const primaryCode = spots.find((s) => s.sigungu_code)?.sigungu_code ?? null;
+  const sameRegion = primaryCode
+    ? records
+        .filter((r) => r.status === 'visited' && r.spots.some((s) => s.sigungu_code === primaryCode))
+        .slice()
+        .sort((a, b) => a.date.localeCompare(b.date))
+    : [];
+  const ordinal = record ? sameRegion.findIndex((r) => r.id === record.id) + 1 : 0;
+  const shareStickers = {
+    dday: record ? ddayFrom(startedAt, record.date) : null,
+    conquest: conquest.ratio,
+    revisit: ordinal >= 2 ? ordinal : null,
+    firstVisit: ordinal === 1,
+  };
   const shareRegionNames = [
     ...new Set(
       spots
@@ -250,6 +271,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     memo: caption,
                     regionNames: shareRegionNames,
                     photoUrls: sharePhotoUrls,
+                    stickers: shareStickers,
                   }),
               },
               // 사진 한 장을 크게 쓰는 두 장 — 사진이 있을 때만 고를 수 있다
@@ -267,6 +289,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                           caption,
                           regionNames: shareRegionNames,
                           photoUrls: sharePhotoUrls,
+                          stickers: shareStickers,
                         }),
                     },
                     {
@@ -280,6 +303,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                           caption,
                           regionNames: shareRegionNames,
                           photoUrls: sharePhotoUrls,
+                          stickers: shareStickers,
                         }),
                     },
                   ]
@@ -296,7 +320,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     pins: mapPins,
                     focus: 'pins',
                     regionNames: shareRegionNames,
-                    badge: `대한민국 ${(conquest.ratio * 100).toFixed(1)}% 정복`,
+                    stickers: shareStickers,
                     caption,
                   }),
               },

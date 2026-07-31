@@ -17,11 +17,14 @@ import {
   wrapText,
 } from '../draw';
 import { createPainter } from '../painter';
+import { stickerRow, stickerTexts, type CardStickers } from '../stickers';
 import type { Painter, ShareRatio, ShareTheme } from '../types';
 
 interface Common {
   theme?: ShareTheme;
   ratio?: ShareRatio;
+  /** 자동으로 붙는 스티커 (계획 §5) */
+  stickers?: CardStickers;
 }
 
 // ── 기록 카드 ────────────────────────────────────────────────────
@@ -56,6 +59,8 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
     ctx.fillText(line, p.W / 2, p.y(300 + i * 54));
   }
   ctx.globalAlpha = 1;
+
+  stickerRow(p, stickerTexts(data.stickers, 2), 372);
 
   const hasPhotos = images.some((i) => i !== null);
   if (hasPhotos) paintPhotoGrid(p, images, 420, 620, data.photoUrls.length);

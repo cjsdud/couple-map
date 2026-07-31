@@ -19,6 +19,7 @@ import {
   wrapText,
 } from '../draw';
 import { createPainter } from '../painter';
+import { filmDateStamp, rubberStamp, stickerColumn, stickerTexts, type CardStickers } from '../stickers';
 import type { Painter, ShareRatio, ShareTheme } from '../types';
 
 export interface PhotoCardData {
@@ -34,6 +35,8 @@ export interface PhotoCardData {
   caption?: string | null;
   regionNames: string[];
   photoUrls: string[];
+  /** 자동으로 붙는 스티커 (계획 §5) */
+  stickers?: CardStickers;
 }
 
 const dotted = (date: string) => date.replace(/-/g, '. ');
@@ -73,13 +76,11 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 18 * p.s;
 
-  // 좌상단 날짜 — 필름 날짜각인 자리
+  // 우상단 날짜 — 필름 카메라 각인 자리
+  filmDateStamp(p, data.date, 1080 - 64, 110);
+  // 그 아래로 스티커 (처음 칠한 동네 · ×N번째 · D+n · 정복률)
+  stickerColumn(p, stickerTexts(data.stickers), { x: 1080 - 64, y: 186, align: 'right', onDark: true });
   ctx.textAlign = 'left';
-  ctx.font = p.font(skin.body, 34, 700);
-  ctx.fillStyle = '#ffffff';
-  ctx.globalAlpha = 0.82;
-  ctx.fillText(dotted(data.date), p.x(64), p.y(108));
-  ctx.globalAlpha = 1;
 
   // 하단 블록 — 제목 → 코스 → 한마디 → 해시태그 순으로 쌓아 올린다
   let y = 1350 - 78;
@@ -140,7 +141,7 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
   ctx.font = p.font(skin.body, 28, 600);
   ctx.fillStyle = '#ffffff';
   ctx.globalAlpha = 0.55;
-  ctx.fillText('우리의 도화지 🖍️', p.x(1080 - 64), p.y(108));
+  ctx.fillText('우리의 도화지 🖍️', p.x(1080 - 64), p.y(1350 - 56));
   ctx.globalAlpha = 1;
   ctx.shadowColor = 'transparent';
   ctx.textAlign = 'left';
@@ -199,6 +200,12 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
     ctx.fillRect(px, py, photoW, photoH);
   }
 
+  // 사진 위 고무도장 — '처음 칠한 동네'·'×N번째' 같은 사건만 (없으면 안 찍는다)
+  const stamp = stickerTexts(data.stickers, 1)[0];
+  if (stamp && !stamp.startsWith('D+') && !stamp.startsWith('대한민국')) {
+    rubberStamp(p, stamp, px + photoW - p.x(34), py + p.vh(84), { anchor: 'right' });
+  }
+
   // 아래 여백 — 손글씨 한마디 + 날짜
   const inkOnMat = skin.dark ? '#f3ede3' : '#3b3733';
   const caption = data.caption?.trim() || data.subtitle?.trim() || '';
@@ -225,6 +232,11 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
   ctx.fillStyle = inkOnMat;
   ctx.globalAlpha = 0.5;
   ctx.fillText(dotted(data.date), w / 2 - pad, h / 2 - p.vh(28));
+  const dday = stickerTexts(data.stickers).find((t) => t.startsWith('D+'));
+  if (dday) {
+    ctx.textAlign = 'left';
+    ctx.fillText(dday, -w / 2 + pad, h / 2 - p.vh(28));
+  }
   ctx.globalAlpha = 1;
   ctx.restore();
 

@@ -8,6 +8,7 @@ import {
   paintPolaroidCard,
   type ShareTheme,
 } from '../../shared/lib/shareCard';
+import { ddayFrom } from '../../shared/lib/share/stickers';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
@@ -716,6 +717,7 @@ export function DayDetailSheet({
   const members = useCoupleMembers();
   const myName = members.data?.find((mem) => mem.user_id === userId)?.nickname ?? null;
   const partnerName = members.data?.find((mem) => mem.user_id !== userId)?.nickname ?? null;
+  const shareStickers = { dday: ddayFrom(startedAt, date) };
 
   return (
     <BottomSheet open onClose={onClose} title={`${y}년 ${m}월 ${d}일`}>
@@ -841,6 +843,7 @@ export function DayDetailSheet({
                     partnerAnswer: partnerEntry?.answer ?? null,
                     photoUrls: photoUrls.map((p) => p.signedUrl as string),
                     caption: caption || null,
+                    stickers: shareStickers,
                   }),
               },
               // 사진을 크게 쓰는 두 장 — 그날 사진이 있을 때만
@@ -858,6 +861,7 @@ export function DayDetailSheet({
                           caption: caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],
                           photoUrls: photoUrls.map((p) => p.signedUrl as string),
+                          stickers: shareStickers,
                         }),
                     },
                     {
@@ -870,6 +874,7 @@ export function DayDetailSheet({
                           caption: caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],
                           photoUrls: photoUrls.map((p) => p.signedUrl as string),
+                          stickers: shareStickers,
                         }),
                     },
                   ]
