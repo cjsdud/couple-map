@@ -84,7 +84,8 @@ export function StylePicker({
   return (
     <div>
       <p className="mb-1.5 text-xs font-semibold opacity-50">스타일</p>
-      <div className="flex gap-2">
+      {/* 3개 이상이면 두 줄로 — 한 줄에 밀어 넣으면 글자가 잘린다 */}
+      <div className={options.length > 2 ? 'grid grid-cols-2 gap-2' : 'flex gap-2'}>
         {options.map((s) => (
           <button
             key={s.key}

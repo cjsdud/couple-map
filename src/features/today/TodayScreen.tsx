@@ -2,7 +2,12 @@ import { useRef, useState } from 'react';
 import { calcStreak, monthGrid } from '../../shared/lib/daily';
 import PushInvite from '../push/PushInvite';
 import { coordToRegion } from '../../shared/lib/kakao';
-import { paintDayCard } from '../../shared/lib/shareCard';
+import {
+  paintDayCard,
+  paintFullBleedCard,
+  paintPolaroidCard,
+  type ShareTheme,
+} from '../../shared/lib/shareCard';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
@@ -838,6 +843,37 @@ export function DayDetailSheet({
                     caption: caption || null,
                   }),
               },
+              // 사진을 크게 쓰는 두 장 — 그날 사진이 있을 때만
+              ...(photoUrls.length > 0
+                ? [
+                    {
+                      key: 'fullbleed',
+                      label: '사진 가득',
+                      paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) =>
+                        paintFullBleedCard(canvas, {
+                          theme,
+                          date,
+                          title: `${m}월 ${d}일의 우리`,
+                          subtitle: null,
+                          caption: caption || myEntry?.note || partnerEntry?.note || null,
+                          regionNames: [],
+                          photoUrls: photoUrls.map((p) => p.signedUrl as string),
+                        }),
+                    },
+                    {
+                      key: 'polaroid',
+                      label: '폴라로이드',
+                      paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) =>
+                        paintPolaroidCard(canvas, {
+                          theme,
+                          date,
+                          caption: caption || myEntry?.note || partnerEntry?.note || null,
+                          regionNames: [],
+                          photoUrls: photoUrls.map((p) => p.signedUrl as string),
+                        }),
+                    },
+                  ]
+                : []),
             ]}
           />
         </div>

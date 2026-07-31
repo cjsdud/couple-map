@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { paintMapCard, paintRecordCard } from '../../shared/lib/shareCard';
+import {
+  paintFullBleedCard,
+  paintMapCard,
+  paintPolaroidCard,
+  paintRecordCard,
+  type ShareTheme,
+} from '../../shared/lib/shareCard';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
 import ShareCardSheet from '../../shared/ui/ShareCardSheet';
@@ -246,6 +252,38 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     photoUrls: sharePhotoUrls,
                   }),
               },
+              // 사진 한 장을 크게 쓰는 두 장 — 사진이 있을 때만 고를 수 있다
+              ...(sharePhotoUrls.length > 0
+                ? [
+                    {
+                      key: 'fullbleed',
+                      label: '사진 가득',
+                      paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) =>
+                        paintFullBleedCard(canvas, {
+                          theme,
+                          date: record.date,
+                          title: spots[0]?.name ?? null,
+                          subtitle: spots.map((s) => s.name).join('  →  '),
+                          caption,
+                          regionNames: shareRegionNames,
+                          photoUrls: sharePhotoUrls,
+                        }),
+                    },
+                    {
+                      key: 'polaroid',
+                      label: '폴라로이드',
+                      paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) =>
+                        paintPolaroidCard(canvas, {
+                          theme,
+                          date: record.date,
+                          subtitle: spots.map((s) => s.name).join('  →  '),
+                          caption,
+                          regionNames: shareRegionNames,
+                          photoUrls: sharePhotoUrls,
+                        }),
+                    },
+                  ]
+                : []),
               {
                 key: 'map',
                 label: '지도 카드',

@@ -17,6 +17,7 @@ export {
   type RecordCardData,
 } from './layouts/classic';
 export { paintMapCard, type MapCardData } from './layouts/mapCard';
+export { paintFullBleedCard, paintPolaroidCard, type PhotoCardData } from './layouts/photo';
 export type { MapPin } from './mapPaint';
 
 /** 카드 → PNG Blob */
