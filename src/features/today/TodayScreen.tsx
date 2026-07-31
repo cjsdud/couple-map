@@ -8,6 +8,7 @@ import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
 import ShareCardSheet from '../../shared/ui/ShareCardSheet';
 import RecordSheet from '../map/RecordSheet';
+import { useCoupleMembers } from '../map/useRecords';
 import type { PhotoDraft, SpotDraft } from '../map/useRecords';
 import {
   isMock,
@@ -705,6 +706,12 @@ export function DayDetailSheet({
   const empty = !isLoading && !myEntry && !partnerEntry && photos.length === 0;
   const [shareOpen, setShareOpen] = useState(false);
 
+  // 공유 카드에 실제 닉네임을 쓴다 — 밖에 나가는 이미지라 '나/짝꿍'보다 이름이 자연스럽다.
+  // (미리보기·연결 전에는 훅이 꺼져 있어 shareCard가 기본 이름으로 폴백한다)
+  const members = useCoupleMembers();
+  const myName = members.data?.find((mem) => mem.user_id === userId)?.nickname ?? null;
+  const partnerName = members.data?.find((mem) => mem.user_id !== userId)?.nickname ?? null;
+
   return (
     <BottomSheet open onClose={onClose} title={`${y}년 ${m}월 ${d}일`}>
       {isLoading ? (
@@ -809,11 +816,13 @@ export function DayDetailSheet({
             onClose={() => setShareOpen(false)}
             fileName={`dohwaji-${date}.png`}
             captionPlaceholder="한마디 남기기 (선택)"
-            contentKey={`${photoUrls.length}-${question.data ? 1 : 0}`}
+            contentKey={`${photoUrls.length}-${question.data ? 1 : 0}-${myName ?? ''}`}
             paint={(canvas, theme, caption) =>
               paintDayCard(canvas, {
                 theme,
                 date,
+                myName: myName ?? undefined,
+                partnerName: partnerName ?? undefined,
                 myMood: myEntry?.mood ?? null,
                 partnerMood: partnerEntry?.mood ?? null,
                 myNote: myEntry?.note ?? null,

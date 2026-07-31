@@ -610,6 +610,9 @@ export interface DayCardData {
   theme?: ShareTheme;
   /** 사용자가 직접 넣는 한마디 (선택) — 사진 아래 인용구로 */
   caption?: string | null;
+  /** 말풍선·답변 앞에 붙는 이름. 없으면 '나'/'짝꿍'으로 (연결 전·미리보기) */
+  myName?: string;
+  partnerName?: string;
 }
 
 export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData) {
@@ -660,8 +663,10 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     }
     bubbleY += h + 56;
   };
-  if (data.myNote) bubble('나', data.myNote, 'left', skin.bubbleMe);
-  if (data.partnerNote) bubble('짝꿍', data.partnerNote, 'right', skin.bubblePartner);
+  const myName = data.myName?.trim() || '나';
+  const partnerName = data.partnerName?.trim() || '짝꿍';
+  if (data.myNote) bubble(myName, data.myNote, 'left', skin.bubbleMe);
+  if (data.partnerNote) bubble(partnerName, data.partnerNote, 'right', skin.bubblePartner);
 
   if (data.question && (data.myAnswer || data.partnerAnswer)) {
     ctx.textAlign = 'center';
@@ -676,13 +681,13 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     ctx.font = F(skin.body, 36, 500);
     ctx.globalAlpha = 0.8;
     if (data.myAnswer) {
-      for (const [i, line] of wrapText(ctx, `나 · ${data.myAnswer}`, CARD_W - 260, 2).entries()) {
+      for (const [i, line] of wrapText(ctx, `${myName} · ${data.myAnswer}`, CARD_W - 260, 2).entries()) {
         ctx.fillText(line, CARD_W / 2, bubbleY + i * 46);
       }
-      bubbleY += 52 + 46 * (wrapText(ctx, `나 · ${data.myAnswer}`, CARD_W - 260, 2).length - 1);
+      bubbleY += 52 + 46 * (wrapText(ctx, `${myName} · ${data.myAnswer}`, CARD_W - 260, 2).length - 1);
     }
     if (data.partnerAnswer) {
-      for (const [i, line] of wrapText(ctx, `짝꿍 · ${data.partnerAnswer}`, CARD_W - 260, 2).entries()) {
+      for (const [i, line] of wrapText(ctx, `${partnerName} · ${data.partnerAnswer}`, CARD_W - 260, 2).entries()) {
         ctx.fillText(line, CARD_W / 2, bubbleY + i * 46);
       }
       bubbleY += 52;
