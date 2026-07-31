@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { signOut, useSession } from '../../shared/lib/auth';
 import { useIssueLinkCode } from '../couple/accountLink';
+import { usePush } from '../push/usePush';
 import { calcStreak, entryDateFor, toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
 import {
@@ -471,6 +472,7 @@ function SettingsCard({
       </label>
 
       {/* '데이트 비용 나누기' 설정은 제거 — 낸 사람은 지출 입력 때 이미 고르므로 (사용자 결정 2026-07-23) */}
+      {supabase && <PushCard disabled={disabled} />}
       {supabase && <LinkCodeCard disabled={disabled} />}
       {supabase && (
         <button
@@ -493,7 +495,52 @@ function SettingsCard({
 }
 
 /**
- * 계정 이어가기 코드 — 토스 버전과 스토어·웹 버전은 로그인 수단이 달라 계정이 따로 생긴다.
+ * 알림 — 짝꿍이 오늘을 남기면 잠금이 풀린다. 그 순간만 알린다 (하루 3건 상한).
+ * 아이폰은 홈 화면에 추가한 앱에서만 받을 수 있어 그 경우 설치 안내로 보낸다.
+ */
+function PushCard({ disabled }: { disabled: boolean }) {
+  const { state, busy, enable, disable } = usePush();
+  const on = state === 'on';
+
+  const detail: Record<typeof state, string> = {
+    on: '짝꿍이 오늘을 남기면 알려드려요 · 하루 3번까지만',
+    off: '짝꿍이 오늘을 남기면 알려드려요 · 하루 3번까지만',
+    denied: '알림이 차단돼 있어요 — 폰 설정에서 이 앱의 알림을 켜 주세요',
+    'needs-install': '홈 화면에 추가하면 알림을 받을 수 있어요',
+    unsupported: '이 브라우저에서는 알림을 지원하지 않아요',
+  };
+
+  return (
+    <div className="space-y-2 border-t border-ink/10 pt-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold">짝꿍 알림</p>
+        {state === 'needs-install' ? (
+          <a
+            href="/install"
+            className="shrink-0 rounded-full border-2 border-pink/40 px-4 py-1.5 text-xs font-bold text-pink"
+          >
+            설치 안내
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void (on ? disable() : enable())}
+            disabled={disabled || busy || state === 'denied' || state === 'unsupported'}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold active:translate-y-px disabled:opacity-40 ${
+              on ? 'bg-pink text-white' : 'border-2 border-ink/20'
+            }`}
+          >
+            {busy ? '…' : on ? '켜짐' : '알림 켜기'}
+          </button>
+        )}
+      </div>
+      <p className="break-keep text-xs leading-relaxed opacity-55">{detail[state]}</p>
+    </div>
+  );
+}
+
+/**
+ * 계정 이어가기 코드 — 로그인 수단이 다른 채널끼리 계정이 따로 생길 수 있다.
  * 여기서 만든 6자리를 새 기기의 첫 화면에 넣으면 이 계정으로 합쳐진다 (0014_account_link.sql).
  */
 function LinkCodeCard({ disabled }: { disabled: boolean }) {

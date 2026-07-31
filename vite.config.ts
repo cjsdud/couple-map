@@ -16,6 +16,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       manifest: false,
       workbox: {
+        // 알림 수신·클릭 동작은 별도 파일이 맡는다 (생성되는 sw.js는 캐싱 전담)
+        importScripts: ['/push-sw.js'],
         // 지도 GeoJSON·공유 카드 웹폰트까지 담아 첫 로드 뒤엔 오프라인에서도 열린다
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,json}'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
