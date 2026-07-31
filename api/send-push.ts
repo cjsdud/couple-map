@@ -106,16 +106,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const { data: subs, error: subsError } = await admin
-      .from('push_subscriptions')
-      .select('endpoint, p256dh, auth')
-      .eq('user_id', partnerId);
-    if (subsError) throw subsError;
-    if (!subs?.length) {
-      res.status(200).json({ sent: 0, reason: 'no-subscription' });
-      return;
-    }
-
+    // 설정 점검을 구독 조회보다 먼저 — 잘못된 키는 구독 유무와 무관한 문제이고,
+    // 이 순서라야 구독을 만들지 않고도 설정이 맞는지 확인할 수 있다.
     // 키 문제와 발송 실패를 구분해서 돌려준다 — 설정 누락은 로그를 봐야만 알 수 있어 답답하다.
     // trim: 환경변수에 붙어 오는 개행·공백이 흔한 실패 원인이라 서버가 흡수한다.
     const publicKey = process.env.VITE_VAPID_PUBLIC_KEY?.trim();
@@ -144,6 +136,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       return;
     }
+    const { data: subs, error: subsError } = await admin
+      .from('push_subscriptions')
+      .select('endpoint, p256dh, auth')
+      .eq('user_id', partnerId);
+    if (subsError) throw subsError;
+    if (!subs?.length) {
+      // 설정은 정상이라는 뜻 — 짝꿍이 아직 알림을 안 켰을 뿐
+      res.status(200).json({ sent: 0, reason: 'no-subscription', vapid: 'ok' });
+      return;
+    }
+
     const payload = JSON.stringify({ ...message, tag: kind, url: '/?tab=today' });
 
     let sent = 0;
