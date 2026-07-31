@@ -30,6 +30,15 @@ const MESSAGES: Record<string, { title: string; body: string }> = {
   today: { title: '우리의 도화지', body: '짝꿍이 오늘을 남겼어요 🎨' },
 };
 
+/** base64url 문자열이 실제 몇 바이트인지 — 키 값 노출 없이 원인을 짚기 위한 진단용 */
+function decodedLength(value: string): number {
+  try {
+    return Buffer.from(value, 'base64url').length;
+  } catch {
+    return -1;
+  }
+}
+
 function requiredEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`환경변수 ${name} 미설정`);
@@ -107,9 +116,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    // 키 문제와 발송 실패를 구분해서 돌려준다 — 설정 누락은 로그를 봐야만 알 수 있어 답답하다
-    const publicKey = process.env.VITE_VAPID_PUBLIC_KEY;
-    const privateKey = process.env.VAPID_PRIVATE_KEY;
+    // 키 문제와 발송 실패를 구분해서 돌려준다 — 설정 누락은 로그를 봐야만 알 수 있어 답답하다.
+    // trim: 환경변수에 붙어 오는 개행·공백이 흔한 실패 원인이라 서버가 흡수한다.
+    const publicKey = process.env.VITE_VAPID_PUBLIC_KEY?.trim();
+    const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
     if (!publicKey || !privateKey) {
       res.status(503).json({
         sent: 0,
@@ -123,7 +133,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       webpush.setVapidDetails('mailto:a41845276@gmail.com', publicKey, privateKey);
     } catch (e) {
-      res.status(503).json({ sent: 0, reason: 'vapid-invalid', detail: String(e).slice(0, 120) });
+      // 키 값은 절대 응답에 넣지 않는다. 대신 "몇 바이트인지"만 알려 원인을 짚게 한다
+      // (공개키 65 · 비밀키 32가 정상. 비밀키 자리에 65가 찍히면 공개키를 잘못 넣은 것)
+      res.status(503).json({
+        sent: 0,
+        reason: 'vapid-invalid',
+        detail: String(e).slice(0, 120),
+        bytes: { public: decodedLength(publicKey), private: decodedLength(privateKey) },
+        expected: { public: 65, private: 32 },
+      });
       return;
     }
     const payload = JSON.stringify({ ...message, tag: kind, url: '/?tab=today' });
