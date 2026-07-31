@@ -107,15 +107,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    webpush.setVapidDetails(
-      'mailto:a41845276@gmail.com',
-      requiredEnv('VITE_VAPID_PUBLIC_KEY'),
-      requiredEnv('VAPID_PRIVATE_KEY'),
-    );
+    // 키 문제와 발송 실패를 구분해서 돌려준다 — 설정 누락은 로그를 봐야만 알 수 있어 답답하다
+    const publicKey = process.env.VITE_VAPID_PUBLIC_KEY;
+    const privateKey = process.env.VAPID_PRIVATE_KEY;
+    if (!publicKey || !privateKey) {
+      res.status(503).json({
+        sent: 0,
+        reason: 'vapid-missing',
+        missing: [!publicKey && 'VITE_VAPID_PUBLIC_KEY', !privateKey && 'VAPID_PRIVATE_KEY'].filter(
+          Boolean,
+        ),
+      });
+      return;
+    }
+    try {
+      webpush.setVapidDetails('mailto:a41845276@gmail.com', publicKey, privateKey);
+    } catch (e) {
+      res.status(503).json({ sent: 0, reason: 'vapid-invalid', detail: String(e).slice(0, 120) });
+      return;
+    }
     const payload = JSON.stringify({ ...message, tag: kind, url: '/?tab=today' });
 
     let sent = 0;
     const dead: string[] = [];
+    const failures: string[] = [];
     for (const s of subs) {
       try {
         await webpush.sendNotification(
@@ -127,12 +142,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // 410/404 = 사용자가 앱을 지웠거나 구독 만료 → 정리 대상
         const status = (e as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) dead.push(s.endpoint as string);
+        failures.push(String(status ?? e).slice(0, 60));
       }
     }
     if (dead.length) await admin.from('push_subscriptions').delete().in('endpoint', dead);
     if (sent > 0) await admin.from('push_log').insert({ user_id: partnerId, kind });
 
-    res.status(200).json({ sent });
+    res.status(200).json({ sent, cleaned: dead.length, failures });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: '알림을 보내지 못했어요' });
