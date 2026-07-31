@@ -15,8 +15,10 @@ export type ShareRatio = 'feed' | 'square' | 'story';
 export interface CardSize {
   key: ShareRatio;
   label: string;
-  /** 버튼 아래 안내 문구 */
+  /** 버튼에 붙는 짧은 비율 표기 (4:5) */
   hint: string;
+  /** 미리보기 아래 안내 한 줄 */
+  note: string;
   w: number;
   h: number;
   /**

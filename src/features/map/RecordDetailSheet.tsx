@@ -4,14 +4,13 @@ import {
   paintMapCard,
   paintPolaroidCard,
   paintRecordCard,
-  type ShareTheme,
 } from '../../shared/lib/shareCard';
 import { ddayFrom } from '../../shared/lib/share/stickers';
 import { useSession } from '../../shared/lib/auth';
 import { useCoupleState } from '../couple/useCoupleState';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
-import ShareCardSheet from '../../shared/ui/ShareCardSheet';
+import ShareCardSheet, { type ShareOptions } from '../../shared/ui/ShareCardSheet';
 import { useConquest } from './useConquest';
 import { useSigunguNames } from './useSigunguNames';
 import {
@@ -263,9 +262,10 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
               {
                 key: 'photo',
                 label: '사진 카드',
-                paint: (canvas, theme, caption) =>
+                paint: (canvas, { theme, ratio, caption }) =>
                   paintRecordCard(canvas, {
                     theme,
+                    ratio,
                     date: record.date,
                     spotNames: spots.map((s) => s.name),
                     memo: caption,
@@ -280,13 +280,14 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     {
                       key: 'fullbleed',
                       label: '사진 가득',
-                      paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) =>
+                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
                         paintFullBleedCard(canvas, {
-                          theme,
+                          theme: o.theme,
+                          ratio: o.ratio,
                           date: record.date,
                           title: spots[0]?.name ?? null,
                           subtitle: spots.map((s) => s.name).join('  →  '),
-                          caption,
+                          caption: o.caption,
                           regionNames: shareRegionNames,
                           photoUrls: sharePhotoUrls,
                           stickers: shareStickers,
@@ -295,12 +296,13 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     {
                       key: 'polaroid',
                       label: '폴라로이드',
-                      paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) =>
+                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
                         paintPolaroidCard(canvas, {
-                          theme,
+                          theme: o.theme,
+                          ratio: o.ratio,
                           date: record.date,
                           subtitle: spots.map((s) => s.name).join('  →  '),
-                          caption,
+                          caption: o.caption,
                           regionNames: shareRegionNames,
                           photoUrls: sharePhotoUrls,
                           stickers: shareStickers,
@@ -311,9 +313,10 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
               {
                 key: 'map',
                 label: '지도 카드',
-                paint: (canvas, theme, caption) =>
+                paint: (canvas, { theme, ratio, caption }) =>
                   paintMapCard(canvas, {
                     theme,
+                    ratio,
                     title: record.date.replace(/-/g, '. '),
                     subtitle: spots.map((s) => s.name).join('  →  '),
                     visitCounts: conquest.visitCounts,

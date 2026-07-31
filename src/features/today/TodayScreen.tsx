@@ -2,17 +2,12 @@ import { useRef, useState } from 'react';
 import { calcStreak, monthGrid } from '../../shared/lib/daily';
 import PushInvite from '../push/PushInvite';
 import { coordToRegion } from '../../shared/lib/kakao';
-import {
-  paintDayCard,
-  paintFullBleedCard,
-  paintPolaroidCard,
-  type ShareTheme,
-} from '../../shared/lib/shareCard';
+import { paintDayCard, paintFullBleedCard, paintPolaroidCard } from '../../shared/lib/shareCard';
 import { ddayFrom } from '../../shared/lib/share/stickers';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
-import ShareCardSheet from '../../shared/ui/ShareCardSheet';
+import ShareCardSheet, { type ShareOptions } from '../../shared/ui/ShareCardSheet';
 import RecordSheet from '../map/RecordSheet';
 import { useCoupleMembers } from '../map/useRecords';
 import type { PhotoDraft, SpotDraft } from '../map/useRecords';
@@ -828,9 +823,10 @@ export function DayDetailSheet({
               {
                 key: 'day',
                 label: '하루 카드',
-                paint: (canvas, theme, caption) =>
+                paint: (canvas, { theme, ratio, caption }) =>
                   paintDayCard(canvas, {
                     theme,
+                    ratio,
                     date,
                     myName: myName ?? undefined,
                     partnerName: partnerName ?? undefined,
@@ -852,13 +848,14 @@ export function DayDetailSheet({
                     {
                       key: 'fullbleed',
                       label: '사진 가득',
-                      paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) =>
+                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
                         paintFullBleedCard(canvas, {
-                          theme,
+                          theme: o.theme,
+                          ratio: o.ratio,
                           date,
                           title: `${m}월 ${d}일의 우리`,
                           subtitle: null,
-                          caption: caption || myEntry?.note || partnerEntry?.note || null,
+                          caption: o.caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],
                           photoUrls: photoUrls.map((p) => p.signedUrl as string),
                           stickers: shareStickers,
@@ -867,11 +864,12 @@ export function DayDetailSheet({
                     {
                       key: 'polaroid',
                       label: '폴라로이드',
-                      paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) =>
+                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
                         paintPolaroidCard(canvas, {
-                          theme,
+                          theme: o.theme,
+                          ratio: o.ratio,
                           date,
-                          caption: caption || myEntry?.note || partnerEntry?.note || null,
+                          caption: o.caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],
                           photoUrls: photoUrls.map((p) => p.signedUrl as string),
                           stickers: shareStickers,

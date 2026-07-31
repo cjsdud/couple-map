@@ -1,12 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
-import { cardToBlob, SHARE_THEMES, type ShareTheme } from '../lib/shareCard';
+import {
+  cardToBlob,
+  SHARE_RATIOS,
+  SHARE_SIZES,
+  SHARE_THEMES,
+  type ShareRatio,
+  type ShareTheme,
+} from '../lib/shareCard';
 import BottomSheet from './BottomSheet';
+
+/** 페인터에 넘기는 선택값 — 스타일·테마·비율·문구 */
+export interface ShareOptions {
+  theme: ShareTheme;
+  ratio: ShareRatio;
+  caption: string;
+}
 
 export interface ShareStyle {
   key: string;
   label: string;
-  /** 카드를 캔버스에 그리는 페인터 (테마·문구 반영) */
-  paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) => Promise<void>;
+  /** 카드를 캔버스에 그리는 페인터 */
+  paint: (canvas: HTMLCanvasElement, o: ShareOptions) => Promise<void>;
 }
 
 interface Props {
@@ -43,6 +57,7 @@ export default function ShareCardSheet({
   contentKey = '',
 }: Props) {
   const [theme, setTheme] = useState<ShareTheme>('paper');
+  const [ratio, setRatio] = useState<ShareRatio>('feed');
   const [styleKey, setStyleKey] = useState(styles[0]?.key ?? '');
   const [caption, setCaption] = useState(defaultCaption);
   const applied = useDebounced(caption, 450);
@@ -59,12 +74,16 @@ export default function ShareCardSheet({
           />
         )}
         <ThemePicker theme={theme} onPick={setTheme} />
+        <RatioPicker ratio={ratio} onPick={setRatio} />
         <CaptionField value={caption} onChange={setCaption} placeholder={captionPlaceholder} />
-        {/* 스타일·테마·문구·데이터 준비 상태가 바뀌면 새로 그린다 */}
+        {/* 스타일·테마·비율·문구·데이터 준비 상태가 바뀌면 새로 그린다 */}
         <CardPreview
-          key={`${style?.key}|${theme}|${applied}|${contentKey}`}
-          paint={(canvas) => style?.paint(canvas, theme, applied) ?? Promise.resolve()}
+          key={`${style?.key}|${theme}|${ratio}|${applied}|${contentKey}`}
+          paint={(canvas) =>
+            style?.paint(canvas, { theme, ratio, caption: applied }) ?? Promise.resolve()
+          }
           fileName={fileName}
+          note={SHARE_SIZES[ratio].note}
         />
       </div>
     </BottomSheet>
@@ -96,6 +115,29 @@ export function StylePicker({
             }`}
           >
             {s.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** 비율 고르기 — 세로(4:5)·정사각(1:1)·스토리(9:16) 3종 (계획 §6) */
+export function RatioPicker({ ratio, onPick }: { ratio: ShareRatio; onPick: (r: ShareRatio) => void }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-semibold opacity-50">크기</p>
+      <div className="flex gap-2">
+        {SHARE_RATIOS.map((r) => (
+          <button
+            key={r.key}
+            type="button"
+            onClick={() => onPick(r.key)}
+            className={`flex-1 rounded-2xl rounded-tl-md border-2 py-2 text-xs font-semibold active:translate-y-px ${
+              ratio === r.key ? 'border-pink bg-pink/10' : 'border-ink/15 bg-white/60'
+            }`}
+          >
+            {r.label} <span className="opacity-50">{r.hint}</span>
           </button>
         ))}
       </div>
@@ -169,9 +211,12 @@ export function ThemePicker({ theme, onPick }: { theme: ShareTheme; onPick: (t: 
 export function CardPreview({
   paint,
   fileName,
+  note = '인스타 세로 규격(4:5)이에요',
 }: {
   paint: (canvas: HTMLCanvasElement) => Promise<void>;
   fileName: string;
+  /** 미리보기 아래 안내 한 줄 (비율에 따라 바뀐다) */
+  note?: string;
 }) {
   const paintRef = useRef(paint);
   const blobRef = useRef<Blob | null>(null);
@@ -261,7 +306,7 @@ export function CardPreview({
         </button>
       </div>
       <p className="break-keep text-center text-xs opacity-50">
-        인스타 세로 규격(4:5)이에요 · 지출은 담지 않아요 · 미리보기를 길게 눌러도 저장돼요
+        {note} · 지출은 담지 않아요 · 미리보기를 길게 눌러도 저장돼요
       </p>
     </div>
   );

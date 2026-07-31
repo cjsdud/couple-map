@@ -6,9 +6,36 @@ import type { CardSize, ShareRatio } from './types';
  * 남는 내용 영역(1080×1330)이 피드(1080×1350)와 거의 같아 레이아웃을 그대로 쓸 수 있다.
  */
 export const SHARE_SIZES: Record<ShareRatio, CardSize> = {
-  feed: { key: 'feed', label: '세로', hint: '4:5', w: 1080, h: 1350, safeTop: 0, safeBottom: 0 },
-  square: { key: 'square', label: '정사각', hint: '1:1', w: 1080, h: 1080, safeTop: 0, safeBottom: 0 },
-  story: { key: 'story', label: '스토리', hint: '9:16', w: 1080, h: 1920, safeTop: 250, safeBottom: 340 },
+  feed: {
+    key: 'feed',
+    label: '세로',
+    hint: '4:5',
+    note: '인스타 세로 규격(4:5)이에요 · 가장 크게 보여요',
+    w: 1080,
+    h: 1350,
+    safeTop: 0,
+    safeBottom: 0,
+  },
+  square: {
+    key: 'square',
+    label: '정사각',
+    hint: '1:1',
+    note: '정사각(1:1)이에요 · 여러 장 올릴 때 좋아요',
+    w: 1080,
+    h: 1080,
+    safeTop: 0,
+    safeBottom: 0,
+  },
+  story: {
+    key: 'story',
+    label: '스토리',
+    hint: '9:16',
+    note: '스토리 규격(9:16)이에요 · 위아래는 화면에 가려지지 않게 비워 뒀어요',
+    w: 1080,
+    h: 1920,
+    safeTop: 250,
+    safeBottom: 340,
+  },
 };
 
 export const SHARE_RATIOS: CardSize[] = [SHARE_SIZES.feed, SHARE_SIZES.square, SHARE_SIZES.story];

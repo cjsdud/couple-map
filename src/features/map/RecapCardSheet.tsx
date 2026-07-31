@@ -1,9 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { paintMapCard, paintRecapCard, type RecapCardData, type ShareTheme } from '../../shared/lib/shareCard';
+import {
+  paintMapCard,
+  paintRecapCard,
+  SHARE_SIZES,
+  type RecapCardData,
+  type ShareRatio,
+  type ShareTheme,
+} from '../../shared/lib/shareCard';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
-import { CaptionField, CardPreview, StylePicker, ThemePicker } from '../../shared/ui/ShareCardSheet';
+import {
+  CaptionField,
+  CardPreview,
+  RatioPicker,
+  StylePicker,
+  ThemePicker,
+} from '../../shared/ui/ShareCardSheet';
 import { useGrass } from '../today/useToday';
 import { useConquest } from './useConquest';
 import { isMock, useRecords } from './useRecords';
@@ -74,6 +87,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const [scope, setScope] = useState<Scope>('month');
   const [theme, setTheme] = useState<ShareTheme>('paper');
   const [styleKey, setStyleKey] = useState('stats');
+  const [ratio, setRatio] = useState<ShareRatio>('feed');
   // 문구 초안: 건드리기 전(null)엔 그 범위의 최근 기록 메모를 프리필 (사용자 요청 2026-07-23)
   const [captionDraft, setCaptionDraft] = useState<string | null>(null);
   const [view, setView] = useState({ year: thisYear, month: thisMonth });
@@ -180,7 +194,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const empty = target.length === 0;
   const loading = photosQuery.isFetching || grassQuery.isFetching || namesQuery.isFetching;
   // 범위·월·데이터가 바뀌면 새로 그린다 (CardPreview는 마운트 시 1회만 그리므로 key로 제어)
-  const cardKey = `${styleKey}-${theme}-${scope}-${monthKey}-${photoUrls.length}-${bothDays}-${regionNames.length}-${typed}`;
+  const cardKey = `${styleKey}-${theme}-${ratio}-${scope}-${monthKey}-${photoUrls.length}-${bothDays}-${regionNames.length}-${typed}`;
 
   const goPrev = () =>
     setView((v) => (v.month === 1 ? { year: v.year - 1, month: 12 } : { year: v.year, month: v.month - 1 }));
@@ -246,6 +260,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
               onPick={setStyleKey}
             />
             <ThemePicker theme={theme} onPick={setTheme} />
+            <RatioPicker ratio={ratio} onPick={setRatio} />
             <CaptionField value={caption} onChange={setCaptionDraft} placeholder="한마디 남기기 (선택)" />
           </>
         )}
@@ -265,10 +280,12 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
           <CardPreview
             key={cardKey}
             fileName={`dohwaji-recap-${scope === 'month' ? monthKey : 'all'}.png`}
+            note={SHARE_SIZES[ratio].note}
             paint={(canvas) =>
               styleKey === 'map'
                 ? paintMapCard(canvas, {
                     theme,
+                    ratio,
                     title: card.title,
                     subtitle: `${Object.keys(scopedCounts).length}개 동네를 칠했어요`,
                     visitCounts: scopedCounts,
@@ -278,7 +295,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
                     stickers: { conquest: conquest.ratio },
                     caption: typed || null,
                   })
-                : paintRecapCard(canvas, card)
+                : paintRecapCard(canvas, { ...card, ratio })
             }
           />
         )}
