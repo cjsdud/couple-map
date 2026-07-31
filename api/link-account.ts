@@ -1,8 +1,8 @@
 // 계정 연동 — 다른 로그인 수단으로 들어온 세션을 "이미 쓰던 계정"에 합친다 (Vercel Fn)
 //
-// 결정(2026-07-25): 토스 버전과 스토어 버전을 따로 배포하되 계정은 하나로 이어져야 한다.
-// 앱인토스는 토스 로그인만, 웹·스토어는 카카오 로그인만 쓸 수 있어서 두 채널이 각각
-// 다른 auth.users를 만든다. 이 함수가 그 둘을 하나로 묶는다.
+// 채널(웹/PWA·스토어 네이티브)마다 로그인 수단이 달라 계정이 따로 생길 수 있다.
+// 이 함수가 그 둘을 하나로 묶는다. (앱인토스 채널은 2026-07-28 중단 — toss_users는
+// 스키마에 남겨 두되 지금 쓰이지 않는다.)
 //
 // 흐름:
 //   ① 쓰던 계정(A)에서 issue_link_code() RPC로 6자리 코드 발급
@@ -28,8 +28,8 @@ interface VercelResponse {
   end(): void;
 }
 
-/** 미니앱(tossmini)에서도 부를 수 있게 — 우리 채널 도메인만 허용 */
-const ALLOWED_ORIGIN = /^https:\/\/([a-z0-9-]+\.)?(vercel\.app|tossmini\.com)$/;
+/** 네이티브 셸 등 다른 출처에서도 부를 수 있게 — 우리 도메인만 허용 */
+const ALLOWED_ORIGIN = /^https:\/\/([a-z0-9-]+\.)?vercel\.app$/;
 
 function applyCors(req: VercelRequest, res: VercelResponse) {
   const origin = req.headers?.origin;

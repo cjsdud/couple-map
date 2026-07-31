@@ -1,11 +1,13 @@
 /**
- * 실행 환경 판별 + 네이티브 전용 동작.
+ * 실행 환경 판별.
  *
- * 같은 웹 코드가 세 곳에서 돈다:
- *   ① 웹/PWA (couple-map-azure.vercel.app)
+ * 같은 웹 코드가 두 곳에서 돈다:
+ *   ① 웹/PWA — 주 채널 (couple-map-azure.vercel.app, 홈 화면에 추가해 앱처럼 사용)
  *   ② 스토어 네이티브 셸 (Capacitor — capacitor://localhost, http://localhost)
- *   ③ 앱인토스 미니앱 (*.tossmini.com)
  * 출처가 다르면 상대 경로 API·OAuth 리다이렉트가 깨지므로 여기서 한 번에 구분한다.
+ *
+ * 앱인토스 채널은 2026-07-28 사용자 결정으로 중단했다 (토스 로그인만 허용 →
+ * 사업자 등록 필수 → 겸직 제약). 관련 코드·패키징은 제거, 경위는 docs/spike-result.md에 남아 있다.
  */
 
 interface CapacitorGlobal {
@@ -25,14 +27,6 @@ export function isNativeApp(): boolean {
 /** 'ios' | 'android' | 'web' */
 export function nativePlatform(): string {
   return cap()?.getPlatform?.() ?? 'web';
-}
-
-/** 앱인토스 미니앱 안인가 (tossmini 도메인 또는 토스 WebView UA) */
-export function isAppsInToss(): boolean {
-  return (
-    /\.(apps|private-apps)\.tossmini\.com$/.test(window.location.hostname) ||
-    navigator.userAgent.includes('AppsInToss')
-  );
 }
 
 /**

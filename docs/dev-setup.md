@@ -103,7 +103,6 @@ gradlew assembleDebug        # 하모니카는 ./gradlew assembleDebug
 | 웹 빌드 | `npm run build` |
 | 웹 결과물을 앱에 반영 | `npx cap sync android` |
 | Android Studio 열기 | `npx cap open android` |
-| 앱인토스 번들 만들기 | `npm run ait:build` → `dohwaji.ait` |
 
 ## 7. 막힐 때
 

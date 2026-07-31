@@ -4,12 +4,29 @@
   "description": "둘이서 채워가는 우리만의 지도 — 데이트 콕, 오늘 한 장, 우리의 기록",
   "lang": "ko",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#fdfcf7",
   "theme_color": "#fdfcf7",
+  "categories": ["lifestyle", "social", "travel"],
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "오늘 남기기",
+      "short_name": "오늘",
+      "description": "오늘의 사진과 한 줄 일기를 남겨요",
+      "url": "/?tab=today"
+    },
+    {
+      "name": "우리 보기",
+      "short_name": "우리",
+      "description": "디데이와 이번 달 가계부를 봐요",
+      "url": "/?tab=us"
+    }
   ]
 }

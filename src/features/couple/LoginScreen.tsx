@@ -3,23 +3,12 @@ import { signInWithKakao } from '../../shared/lib/auth';
 import { pendingInviteCode } from '../../shared/lib/invite';
 import { supabase } from '../../shared/lib/supabase';
 
-/**
- * 앱인토스 WebView 판별 (UA 예: "AppsInToss TossApp/5.269.0 ... iPhone").
- * 이 채널은 정책상 토스 로그인만 허용된다 — 자사 로그인·카카오 로그인 모두 사용 불가이고,
- * 토스 로그인은 사업자 등록이 선행돼야 한다 (docs/spike-result.md §4).
- * 그래서 로그인 버튼을 띄우면 100% 실패하는 길이라, 대신 사정을 밝히고 미리보기로 안내한다.
- */
-function isAppsInToss(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('AppsInToss');
-}
-
 export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
   // 카카오 인증이 안 되는 사용자를 위한 정식 대체 경로 (사용자 요청 2026-07-23)
   const [emailOpen, setEmailOpen] = useState(false);
   // 초대 링크로 들어온 짝꿍 — 로그인만 하면 코드가 자동으로 이어진다
   const [invited] = useState(() => pendingInviteCode() !== null);
-  const [inToss] = useState(isAppsInToss);
 
   const handleKakao = async () => {
     setBusy(true);
@@ -46,52 +35,29 @@ export default function LoginScreen() {
           </p>
         )}
 
-        {inToss ? (
-          <div className="mt-10 w-full space-y-4">
-            <div className="rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-5 py-4 text-left text-sm leading-relaxed">
-              <p className="font-bold">토스 로그인을 준비하고 있어요</p>
-              <p className="mt-1.5 opacity-70">
-                토스 안에서는 토스 로그인만 쓸 수 있어요. 준비가 끝날 때까지는 웹에서 이용해 주세요.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = '/?mock=1';
-              }}
-              className="w-full rounded-2xl rounded-tl-md bg-pink px-6 py-3.5 text-base font-bold text-white shadow-sm active:translate-y-px"
-            >
-              먼저 둘러보기
-            </button>
-          </div>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => void handleKakao()}
-              disabled={busy}
-              className="mt-10 w-full rounded-2xl rounded-tl-md bg-yellow px-6 py-3.5 text-base font-bold text-ink shadow-sm active:translate-y-px disabled:opacity-60"
-            >
-              💬 카카오로 시작하기
-            </button>
+        <button
+          type="button"
+          onClick={() => void handleKakao()}
+          disabled={busy}
+          className="mt-10 w-full rounded-2xl rounded-tl-md bg-yellow px-6 py-3.5 text-base font-bold text-ink shadow-sm active:translate-y-px disabled:opacity-60"
+        >
+          💬 카카오로 시작하기
+        </button>
 
-            {emailOpen ? (
-              <EmailAuth />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setEmailOpen(true)}
-                className="mt-4 text-sm font-semibold opacity-60 underline underline-offset-4 active:opacity-80"
-              >
-                카카오가 안 되면 이메일로 시작하기
-              </button>
-            )}
-          </>
+        {emailOpen ? (
+          <EmailAuth />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEmailOpen(true)}
+            className="mt-4 text-sm font-semibold opacity-60 underline underline-offset-4 active:opacity-80"
+          >
+            카카오가 안 되면 이메일로 시작하기
+          </button>
         )}
       </div>
 
       <div className="space-y-1 pb-2 text-center text-xs opacity-45">
-        <p>앱인토스에서는 토스 로그인으로 이용하게 돼요</p>
         <div className="flex items-center justify-center gap-3">
           {/* 스토어가 아니라 링크로 퍼지는 앱이라, 홈 화면 추가 안내를 눈에 띄는 곳에 둔다 */}
           <a href="/install" className="underline underline-offset-2">
@@ -100,17 +66,6 @@ export default function LoginScreen() {
           <a href="/privacy.html" className="underline underline-offset-2">
             개인정보 처리방침
           </a>
-          {/* Phase 0 전용 — 미니앱 WebView엔 주소창이 없어 진단 페이지 진입로가 필요하다.
-              샌드박스 검증이 끝나면 이 버튼과 SpikePage를 함께 제거한다. */}
-          <button
-            type="button"
-            onClick={() => {
-              window.location.hash = '#/spike';
-            }}
-            className="underline underline-offset-2"
-          >
-            환경 진단
-          </button>
         </div>
       </div>
     </main>

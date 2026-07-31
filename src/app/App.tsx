@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import InstallGuide from '../features/install/InstallGuide';
-import SpikePage from '../features/spike/SpikePage';
 import LoginScreen from '../features/couple/LoginScreen';
 import OnboardingFlow from '../features/couple/OnboardingFlow';
 import {
@@ -17,16 +16,6 @@ import AppShell from './AppShell';
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
-
-function useHashRoute(): string {
-  const [hash, setHash] = useState(window.location.hash);
-  useEffect(() => {
-    const onChange = () => setHash(window.location.hash);
-    window.addEventListener('hashchange', onChange);
-    return () => window.removeEventListener('hashchange', onChange);
-  }, []);
-  return hash;
-}
 
 function Splash({ label = '도화지를 펼치는 중…' }: { label?: string }) {
   return (
@@ -152,7 +141,6 @@ function Gate() {
 }
 
 export default function App() {
-  const hash = useHashRoute();
   // 홈 화면 설치 안내 — 스토어 없는 배포의 관문이라 공유 가능한 주소로 둔다
   if (window.location.pathname === '/install') {
     return <InstallGuide />;
@@ -165,8 +153,7 @@ export default function App() {
   }
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Phase 0 진단 페이지는 실기기 검증 때까지 #/spike 경로로 유지 */}
-      {hash.startsWith('#/spike') ? <SpikePage /> : <Gate />}
+      <Gate />
     </QueryClientProvider>
   );
 }

@@ -1,10 +1,9 @@
 /**
  * 서버 함수(Vercel Fn) 호출 주소.
  *
- * 앱인토스 미니앱은 .ait 번들이 `*.tossmini.com`에서 서빙되므로 `/api/...` 상대 경로가
- * 그 도메인을 가리켜 404가 난다 (docs/spike-result.md, 2026-07-25 실측). 우리 서버 함수는
- * Vercel에만 있으니 같은 출처가 아닐 때는 절대 주소로 부른다.
- * (해당 함수들은 tossmini/vercel 출처에 대해 CORS를 허용한다.)
+ * 서버 함수는 Vercel에만 있다. 웹/PWA는 같은 출처라 상대 경로로 충분하지만,
+ * 스토어 네이티브 셸은 출처가 앱 내부(localhost)여서 `/api/...`가 404가 난다
+ * → 같은 출처가 아닐 때는 절대 주소로 부른다 (서버 함수가 CORS를 허용한다).
  */
 import { isNativeApp } from './native';
 
