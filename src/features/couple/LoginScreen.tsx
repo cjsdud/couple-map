@@ -93,6 +93,10 @@ export default function LoginScreen() {
       <div className="space-y-1 pb-2 text-center text-xs opacity-45">
         <p>앱인토스에서는 토스 로그인으로 이용하게 돼요</p>
         <div className="flex items-center justify-center gap-3">
+          {/* 스토어가 아니라 링크로 퍼지는 앱이라, 홈 화면 추가 안내를 눈에 띄는 곳에 둔다 */}
+          <a href="/install" className="underline underline-offset-2">
+            앱처럼 쓰기
+          </a>
           <a href="/privacy.html" className="underline underline-offset-2">
             개인정보 처리방침
           </a>
