@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import {
+  paintFilmStripCard,
   paintFullBleedCard,
+  paintMagazineCard,
   paintMapCard,
   paintPolaroidCard,
   paintRecordCard,
+  paintTicketCard,
 } from '../../shared/lib/shareCard';
 import { ddayFrom } from '../../shared/lib/share/stickers';
 import { useSession } from '../../shared/lib/auth';
@@ -310,6 +313,56 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     },
                   ]
                 : []),
+              ...(sharePhotoUrls.length >= 2
+                ? [
+                    {
+                      key: 'film',
+                      label: '필름',
+                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
+                        paintFilmStripCard(canvas, {
+                          theme: o.theme,
+                          ratio: o.ratio,
+                          date: record.date,
+                          subtitle: spots.map((s) => s.name).join('  →  '),
+                          caption: o.caption,
+                          regionNames: shareRegionNames,
+                          photoUrls: sharePhotoUrls,
+                          stickers: shareStickers,
+                        }),
+                    },
+                  ]
+                : []),
+              {
+                key: 'ticket',
+                label: '티켓',
+                paint: (canvas, { theme, ratio, caption }) =>
+                  paintTicketCard(canvas, {
+                    theme,
+                    ratio,
+                    date: record.date,
+                    spotNames: spots.map((s) => s.name),
+                    caption,
+                    regionNames: shareRegionNames,
+                    photoUrls: sharePhotoUrls,
+                    stickers: shareStickers,
+                  }),
+              },
+              {
+                key: 'magazine',
+                label: '매거진',
+                paint: (canvas, { theme, ratio, caption }) =>
+                  paintMagazineCard(canvas, {
+                    theme,
+                    ratio,
+                    date: record.date,
+                    title: spots[0]?.name ?? null,
+                    subtitle: spots.map((s) => s.name).join('  →  '),
+                    caption,
+                    regionNames: shareRegionNames,
+                    photoUrls: sharePhotoUrls,
+                    stickers: shareStickers,
+                  }),
+              },
               {
                 key: 'map',
                 label: '지도 카드',

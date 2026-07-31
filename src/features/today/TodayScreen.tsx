@@ -2,7 +2,12 @@ import { useRef, useState } from 'react';
 import { calcStreak, monthGrid } from '../../shared/lib/daily';
 import PushInvite from '../push/PushInvite';
 import { coordToRegion } from '../../shared/lib/kakao';
-import { paintDayCard, paintFullBleedCard, paintPolaroidCard } from '../../shared/lib/shareCard';
+import {
+  paintDayCard,
+  paintFilmStripCard,
+  paintFullBleedCard,
+  paintPolaroidCard,
+} from '../../shared/lib/shareCard';
 import { ddayFrom } from '../../shared/lib/share/stickers';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
@@ -872,6 +877,24 @@ export function DayDetailSheet({
                           caption: o.caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],
                           photoUrls: photoUrls.map((p) => p.signedUrl as string),
+                          stickers: shareStickers,
+                        }),
+                    },
+                  ]
+                : []),
+              ...(photoUrls.length >= 2
+                ? [
+                    {
+                      key: 'film',
+                      label: '필름',
+                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
+                        paintFilmStripCard(canvas, {
+                          theme: o.theme,
+                          ratio: o.ratio,
+                          date,
+                          caption: o.caption || myEntry?.note || partnerEntry?.note || null,
+                          regionNames: [],
+                          photoUrls: photoUrls.map((ph) => ph.signedUrl as string),
                           stickers: shareStickers,
                         }),
                     },

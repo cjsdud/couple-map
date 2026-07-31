@@ -18,6 +18,13 @@ export {
 } from './layouts/classic';
 export { paintMapCard, type MapCardData } from './layouts/mapCard';
 export { paintFullBleedCard, paintPolaroidCard, type PhotoCardData } from './layouts/photo';
+export {
+  paintFilmStripCard,
+  paintMagazineCard,
+  paintTicketCard,
+  type ExtraCardData,
+} from './layouts/extra';
+export { ddayFrom, type CardStickers } from './stickers';
 export type { MapPin } from './mapPaint';
 
 /** 카드 → PNG Blob */
