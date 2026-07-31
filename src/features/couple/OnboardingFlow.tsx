@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { signOut, suggestedNickname } from '../../shared/lib/auth';
 import { clearInviteCode, inviteLink, pendingInviteCode } from '../../shared/lib/invite';
-import { useLinkAccount } from './accountLink';
 import {
   useCreateCouple,
   useCreateProfile,
@@ -120,15 +119,10 @@ function NicknameStep({ userId }: { userId: string }) {
 function ConnectStep({ userId, nickname }: { userId: string; nickname: string }) {
   // 초대 링크로 들어왔다면 코드 입력 화면으로 직행 + 코드 프리필
   const [invited] = useState(pendingInviteCode);
-  const [mode, setMode] = useState<'choose' | 'join' | 'link'>(invited ? 'join' : 'choose');
+  const [mode, setMode] = useState<'choose' | 'join'>(invited ? 'join' : 'choose');
   const createCouple = useCreateCouple(userId);
   const joinCouple = useJoinCouple(userId);
   const [code, setCode] = useState(invited ?? '');
-
-  // 다른 채널(토스↔카카오)에서 쓰던 계정으로 이어가기 — 세션이 그 계정으로 바뀐다
-  if (mode === 'link') {
-    return <LinkAccountStep onBack={() => setMode('choose')} />;
-  }
 
   if (mode === 'join') {
     const codeValid = /^[A-Z0-9]{6}$/.test(code);
@@ -212,63 +206,10 @@ function ConnectStep({ userId, nickname }: { userId: string; nickname: string })
       {createCouple.isError && (
         <p className="text-sm text-pink">{friendlyError(createCouple.error)}</p>
       )}
-      <button
-        type="button"
-        onClick={() => setMode('link')}
-        className="w-full py-2 text-sm opacity-50 underline underline-offset-4"
-      >
-        다른 앱에서 쓰던 계정 이어가기
-      </button>
     </div>
   );
 }
 
-/**
- * 계정 이어가기 — 토스 버전과 스토어·웹 버전은 로그인 수단이 달라 계정이 따로 생긴다.
- * 쓰던 계정에서 발급한 코드를 넣으면 지금 만들어진 빈 계정을 그쪽으로 합친다.
- */
-function LinkAccountStep({ onBack }: { onBack: () => void }) {
-  const [code, setCode] = useState('');
-  const link = useLinkAccount();
-  const codeValid = /^[A-Z0-9]{6}$/.test(code);
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (codeValid && !link.isPending) link.mutate(code);
-      }}
-      className="space-y-4"
-    >
-      <h1 className="text-2xl font-bold">계정 이어가기</h1>
-      <p className="text-sm leading-relaxed opacity-60">
-        쓰던 기기에서 <b>우리 탭 → 계정 이어가기</b>로 코드를 만들어 넣어 주세요. 지금 계정은
-        비어 있어야 이어붙일 수 있어요.
-      </p>
-      <input
-        value={code}
-        onChange={(e) => setCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
-        maxLength={6}
-        placeholder="ABC123"
-        autoFocus
-        autoCapitalize="characters"
-        autoComplete="off"
-        className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-3 text-center text-2xl font-bold tracking-[0.4em] outline-none focus:border-pink"
-      />
-      {link.isError && <p className="text-sm text-pink">{friendlyError(link.error)}</p>}
-      <button
-        type="submit"
-        disabled={!codeValid || link.isPending}
-        className="w-full rounded-2xl rounded-tl-md bg-pink px-6 py-3.5 text-base font-bold text-white shadow-sm active:translate-y-px disabled:opacity-40"
-      >
-        {link.isPending ? '이어붙이는 중…' : '계정 이어가기'}
-      </button>
-      <button type="button" onClick={onBack} className="w-full py-2 text-sm opacity-50">
-        ← 돌아가기
-      </button>
-    </form>
-  );
-}
 
 // ── ②-대기: 코드 만들고 짝꿍 기다리는 중 (재진입 시에도 복원) ────
 function WaitingStep({
