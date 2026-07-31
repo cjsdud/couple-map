@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { paintRecordCard } from '../../shared/lib/shareCard';
+import { paintMapCard, paintRecordCard } from '../../shared/lib/shareCard';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
 import ShareCardSheet from '../../shared/ui/ShareCardSheet';
+import { useConquest } from './useConquest';
 import { useSigunguNames } from './useSigunguNames';
 import {
   categoryLabel,
@@ -104,6 +105,8 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
   const [shareOpen, setShareOpen] = useState(false);
   // 공유 카드 지역 칩용 코드→이름 — 상세가 열려 있을 때만 GeoJSON을 가져온다
   const sigunguNames = useSigunguNames(record !== null).data ?? {};
+  // 지도 카드는 커플의 정복 현황 위에 이 날의 코스를 얹는다
+  const conquest = useConquest();
 
   const close = () => {
     markVisited.reset();
@@ -118,6 +121,10 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
   const total = record ? record.expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
   // 공유 카드 데이터 — 사진·지역명이 늦게 로드돼도 contentKey로 다시 그린다
   const sharePhotoUrls = photos.map((p) => p.signedUrl).filter((u): u is string => Boolean(u));
+  // 지도 카드용 핀 — 좌표가 있는 스팟만 (검색 없이 이름만 적은 스팟은 지도에 못 찍는다)
+  const mapPins = spots
+    .filter((s) => s.lat !== null && s.lng !== null)
+    .map((s) => ({ lng: s.lng as number, lat: s.lat as number, label: s.name }));
   const shareRegionNames = [
     ...new Set(
       spots
@@ -224,17 +231,38 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
             fileName={`dohwaji-${record.date}.png`}
             defaultCaption={record.memo ?? ''}
             captionPlaceholder="한마디 남기기 (선택)"
-            contentKey={`${sharePhotoUrls.length}-${shareRegionNames.length}`}
-            paint={(canvas, theme, caption) =>
-              paintRecordCard(canvas, {
-                theme,
-                date: record.date,
-                spotNames: spots.map((s) => s.name),
-                memo: caption,
-                regionNames: shareRegionNames,
-                photoUrls: sharePhotoUrls,
-              })
-            }
+            contentKey={`${sharePhotoUrls.length}-${shareRegionNames.length}-${mapPins.length}`}
+            styles={[
+              {
+                key: 'photo',
+                label: '사진 카드',
+                paint: (canvas, theme, caption) =>
+                  paintRecordCard(canvas, {
+                    theme,
+                    date: record.date,
+                    spotNames: spots.map((s) => s.name),
+                    memo: caption,
+                    regionNames: shareRegionNames,
+                    photoUrls: sharePhotoUrls,
+                  }),
+              },
+              {
+                key: 'map',
+                label: '지도 카드',
+                paint: (canvas, theme, caption) =>
+                  paintMapCard(canvas, {
+                    theme,
+                    title: record.date.replace(/-/g, '. '),
+                    subtitle: spots.map((s) => s.name).join('  →  '),
+                    visitCounts: conquest.visitCounts,
+                    pins: mapPins,
+                    focus: 'pins',
+                    regionNames: shareRegionNames,
+                    badge: `대한민국 ${(conquest.ratio * 100).toFixed(1)}% 정복`,
+                    caption,
+                  }),
+              },
+            ]}
           />
         </div>
       )}

@@ -61,6 +61,8 @@ export interface Skin {
   badgeInk: string;
   /** 어두운 배경인가 — 그라데이션·낙서 색을 고를 때 쓴다 */
   dark: boolean;
+  /** 지도 카드 색 — 바다·육지·경계선·정복 색칠·핀 */
+  map: { sea: string; land: string; line: string; fill: string; pin: string };
   /** 카드별 기본 강조색(pink/yellow/green)을 테마에 맞게 변환 */
   accentFor: (base: string) => string;
   paintBg: (p: Painter) => void;

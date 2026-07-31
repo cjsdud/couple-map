@@ -16,6 +16,8 @@ export {
   type RecapCardData,
   type RecordCardData,
 } from './layouts/classic';
+export { paintMapCard, type MapCardData } from './layouts/mapCard';
+export type { MapPin } from './mapPaint';
 
 /** 카드 → PNG Blob */
 export function cardToBlob(canvas: HTMLCanvasElement): Promise<Blob> {

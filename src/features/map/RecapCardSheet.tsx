@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { paintRecapCard, type RecapCardData, type ShareTheme } from '../../shared/lib/shareCard';
+import { paintMapCard, paintRecapCard, type RecapCardData, type ShareTheme } from '../../shared/lib/shareCard';
 import { supabase } from '../../shared/lib/supabase';
 import BottomSheet from '../../shared/ui/BottomSheet';
-import { CaptionField, CardPreview, ThemePicker } from '../../shared/ui/ShareCardSheet';
+import { CaptionField, CardPreview, StylePicker, ThemePicker } from '../../shared/ui/ShareCardSheet';
 import { useGrass } from '../today/useToday';
 import { useConquest } from './useConquest';
 import { isMock, useRecords } from './useRecords';
@@ -73,6 +73,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const thisMonth = now.getMonth() + 1;
   const [scope, setScope] = useState<Scope>('month');
   const [theme, setTheme] = useState<ShareTheme>('paper');
+  const [styleKey, setStyleKey] = useState('stats');
   // 문구 초안: 건드리기 전(null)엔 그 범위의 최근 기록 메모를 프리필 (사용자 요청 2026-07-23)
   const [captionDraft, setCaptionDraft] = useState<string | null>(null);
   const [view, setView] = useState({ year: thisYear, month: thisMonth });
@@ -125,6 +126,26 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   ];
   const regionNames = codes.map((c) => sigunguNames[c]).filter((n): n is string => Boolean(n));
 
+  // 지도 카드 입력 — 범위에 맞춰 다시 센다 (이번 달 카드에 전체 색칠을 얹으면 범위가 어긋난다)
+  const scopedCounts: Record<string, number> = {};
+  for (const r of target) {
+    for (const sp of r.spots) {
+      if (sp.sigungu_code) scopedCounts[sp.sigungu_code] = (scopedCounts[sp.sigungu_code] ?? 0) + 1;
+    }
+  }
+  // 같은 자리 핀이 겹쳐 뭉치지 않게 소수점 3자리로 묶는다 (약 100m)
+  const pinSeen = new Set<string>();
+  const mapPins: { lng: number; lat: number }[] = [];
+  for (const r of target) {
+    for (const sp of r.spots) {
+      if (sp.lat === null || sp.lng === null) continue;
+      const key = `${sp.lng.toFixed(3)},${sp.lat.toFixed(3)}`;
+      if (pinSeen.has(key)) continue;
+      pinSeen.add(key);
+      mapPins.push({ lng: sp.lng, lat: sp.lat });
+    }
+  }
+
   // 문구를 넣으면 하단 한 줄을 대체, 비우면 기본 문구 유지
   const typed = appliedCaption.trim();
   const card: RecapCardData =
@@ -159,7 +180,7 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
   const empty = target.length === 0;
   const loading = photosQuery.isFetching || grassQuery.isFetching || namesQuery.isFetching;
   // 범위·월·데이터가 바뀌면 새로 그린다 (CardPreview는 마운트 시 1회만 그리므로 key로 제어)
-  const cardKey = `${theme}-${scope}-${monthKey}-${photoUrls.length}-${bothDays}-${regionNames.length}-${typed}`;
+  const cardKey = `${styleKey}-${theme}-${scope}-${monthKey}-${photoUrls.length}-${bothDays}-${regionNames.length}-${typed}`;
 
   const goPrev = () =>
     setView((v) => (v.month === 1 ? { year: v.year - 1, month: 12 } : { year: v.year, month: v.month - 1 }));
@@ -216,6 +237,14 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
 
         {!empty && (
           <>
+            <StylePicker
+              options={[
+                { key: 'stats', label: '기록 카드' },
+                { key: 'map', label: '지도 카드' },
+              ]}
+              value={styleKey}
+              onPick={setStyleKey}
+            />
             <ThemePicker theme={theme} onPick={setTheme} />
             <CaptionField value={caption} onChange={setCaptionDraft} placeholder="한마디 남기기 (선택)" />
           </>
@@ -236,7 +265,21 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
           <CardPreview
             key={cardKey}
             fileName={`dohwaji-recap-${scope === 'month' ? monthKey : 'all'}.png`}
-            paint={(canvas) => paintRecapCard(canvas, card)}
+            paint={(canvas) =>
+              styleKey === 'map'
+                ? paintMapCard(canvas, {
+                    theme,
+                    title: card.title,
+                    subtitle: `${Object.keys(scopedCounts).length}개 동네를 칠했어요`,
+                    visitCounts: scopedCounts,
+                    pins: mapPins,
+                    focus: 'all',
+                    regionNames,
+                    badge: `대한민국 ${(conquest.ratio * 100).toFixed(1)}% 정복`,
+                    caption: typed || null,
+                  })
+                : paintRecapCard(canvas, card)
+            }
           />
         )}
       </div>

@@ -21,6 +21,7 @@ export const PALETTES: Record<ShareTheme, Skin> = {
     badgeBg: '#3b3733',
     badgeInk: '#fdfcf7',
     dark: false,
+    map: { sea: '#d6e4ea', land: '#fdfcf7', line: 'rgba(74,69,61,0.34)', fill: '#8cab68', pin: '#e8637c' },
     accentFor: (base) => base,
     paintBg: (p) => {
       const { ctx } = p;
@@ -54,6 +55,7 @@ export const PALETTES: Record<ShareTheme, Skin> = {
     badgeBg: '#e0a15a',
     badgeInk: '#211e1b',
     dark: true,
+    map: { sea: '#16130f', land: '#332e27', line: 'rgba(224,161,90,0.45)', fill: '#e0a15a', pin: '#f3ede3' },
     accentFor: () => '#e0a15a',
     paintBg: (p) => {
       const { ctx } = p;
@@ -80,6 +82,7 @@ export const PALETTES: Record<ShareTheme, Skin> = {
     badgeBg: '#1a1a1a',
     badgeInk: '#ffffff',
     dark: false,
+    map: { sea: '#ededed', land: '#ffffff', line: 'rgba(0,0,0,0.38)', fill: '#1a1a1a', pin: '#1a1a1a' },
     accentFor: () => '#1a1a1a',
     paintBg: (p) => {
       const { ctx } = p;
@@ -108,6 +111,7 @@ export const PALETTES: Record<ShareTheme, Skin> = {
     badgeBg: '#ffd28a',
     badgeInk: '#3a1f2e',
     dark: true,
+    map: { sea: 'rgba(255,255,255,0.10)', land: 'rgba(255,245,239,0.22)', line: 'rgba(255,245,239,0.5)', fill: '#ffd28a', pin: '#ffffff' },
     accentFor: () => '#ffd28a',
     paintBg: (p) => {
       const { ctx } = p;
@@ -135,6 +139,7 @@ export const PALETTES: Record<ShareTheme, Skin> = {
     badgeBg: '#4a3b2a',
     badgeInk: '#f4ead2',
     dark: false,
+    map: { sea: '#cfc2a3', land: '#f4ead2', line: 'rgba(74,59,42,0.45)', fill: '#a8613f', pin: '#4a3b2a' },
     accentFor: () => '#a8613f',
     paintBg: (p) => {
       const { ctx } = p;
@@ -171,6 +176,7 @@ export const PALETTES: Record<ShareTheme, Skin> = {
     badgeBg: '#c9a6e0',
     badgeInk: '#ffffff',
     dark: false,
+    map: { sea: '#dcebf6', land: '#ffffff', line: 'rgba(91,85,112,0.32)', fill: '#c9a6e0', pin: '#e58ab0' },
     accentFor: () => '#e58ab0',
     paintBg: (p) => {
       const { ctx } = p;

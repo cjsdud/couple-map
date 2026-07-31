@@ -817,23 +817,28 @@ export function DayDetailSheet({
             fileName={`dohwaji-${date}.png`}
             captionPlaceholder="한마디 남기기 (선택)"
             contentKey={`${photoUrls.length}-${question.data ? 1 : 0}-${myName ?? ''}`}
-            paint={(canvas, theme, caption) =>
-              paintDayCard(canvas, {
-                theme,
-                date,
-                myName: myName ?? undefined,
-                partnerName: partnerName ?? undefined,
-                myMood: myEntry?.mood ?? null,
-                partnerMood: partnerEntry?.mood ?? null,
-                myNote: myEntry?.note ?? null,
-                partnerNote: partnerEntry?.note ?? null,
-                question: question.data?.text ?? null,
-                myAnswer: myEntry?.answer ?? null,
-                partnerAnswer: partnerEntry?.answer ?? null,
-                photoUrls: photoUrls.map((p) => p.signedUrl as string),
-                caption: caption || null,
-              })
-            }
+            styles={[
+              {
+                key: 'day',
+                label: '하루 카드',
+                paint: (canvas, theme, caption) =>
+                  paintDayCard(canvas, {
+                    theme,
+                    date,
+                    myName: myName ?? undefined,
+                    partnerName: partnerName ?? undefined,
+                    myMood: myEntry?.mood ?? null,
+                    partnerMood: partnerEntry?.mood ?? null,
+                    myNote: myEntry?.note ?? null,
+                    partnerNote: partnerEntry?.note ?? null,
+                    question: question.data?.text ?? null,
+                    myAnswer: myEntry?.answer ?? null,
+                    partnerAnswer: partnerEntry?.answer ?? null,
+                    photoUrls: photoUrls.map((p) => p.signedUrl as string),
+                    caption: caption || null,
+                  }),
+              },
+            ]}
           />
         </div>
       )}

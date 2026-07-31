@@ -2,11 +2,21 @@ import { useEffect, useRef, useState } from 'react';
 import { cardToBlob, SHARE_THEMES, type ShareTheme } from '../lib/shareCard';
 import BottomSheet from './BottomSheet';
 
+export interface ShareStyle {
+  key: string;
+  label: string;
+  /** 카드를 캔버스에 그리는 페인터 (테마·문구 반영) */
+  paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) => Promise<void>;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** 카드를 캔버스에 그리는 페인터 (테마·문구 반영) */
-  paint: (canvas: HTMLCanvasElement, theme: ShareTheme, caption: string) => Promise<void>;
+  /**
+   * 스타일 목록 — 사용자는 완성된 한 장을 고르기만 한다 (레이아웃·색을 조합하지 않는다,
+   * docs/share-card-v2-plan.md §3). 1개면 선택 줄을 숨긴다.
+   */
+  styles: ShareStyle[];
   fileName: string;
   /** 문구 입력의 초기값 (예: 기록 메모) */
   defaultCaption?: string;
@@ -26,29 +36,69 @@ interface Props {
 export default function ShareCardSheet({
   open,
   onClose,
-  paint,
+  styles,
   fileName,
   defaultCaption = '',
   captionPlaceholder = '문구 넣기 (선택)',
   contentKey = '',
 }: Props) {
   const [theme, setTheme] = useState<ShareTheme>('paper');
+  const [styleKey, setStyleKey] = useState(styles[0]?.key ?? '');
   const [caption, setCaption] = useState(defaultCaption);
   const applied = useDebounced(caption, 450);
+  const style = styles.find((s) => s.key === styleKey) ?? styles[0];
 
   return (
     <BottomSheet open={open} onClose={onClose} title="공유 카드">
       <div className="space-y-3 pb-2">
+        {styles.length > 1 && (
+          <StylePicker
+            options={styles.map((s) => ({ key: s.key, label: s.label }))}
+            value={style?.key ?? ''}
+            onPick={setStyleKey}
+          />
+        )}
         <ThemePicker theme={theme} onPick={setTheme} />
         <CaptionField value={caption} onChange={setCaption} placeholder={captionPlaceholder} />
-        {/* theme·문구·데이터 준비 상태가 바뀌면 새로 그린다 */}
+        {/* 스타일·테마·문구·데이터 준비 상태가 바뀌면 새로 그린다 */}
         <CardPreview
-          key={`${theme}|${applied}|${contentKey}`}
-          paint={(canvas) => paint(canvas, theme, applied)}
+          key={`${style?.key}|${theme}|${applied}|${contentKey}`}
+          paint={(canvas) => style?.paint(canvas, theme, applied) ?? Promise.resolve()}
           fileName={fileName}
         />
       </div>
     </BottomSheet>
+  );
+}
+
+/** 스타일 고르기 — 완성된 한 장 단위. 조합(레이아웃×테마)을 노출하지 않는다 */
+export function StylePicker({
+  options,
+  value,
+  onPick,
+}: {
+  options: { key: string; label: string }[];
+  value: string;
+  onPick: (key: string) => void;
+}) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-semibold opacity-50">스타일</p>
+      <div className="flex gap-2">
+        {options.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => onPick(s.key)}
+            className={`flex-1 rounded-2xl rounded-tl-md border-2 py-2 text-xs font-semibold active:translate-y-px ${
+              value === s.key ? 'border-pink bg-pink/10' : 'border-ink/15 bg-white/60'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
