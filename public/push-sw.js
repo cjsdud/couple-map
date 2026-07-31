@@ -12,9 +12,10 @@ self.addEventListener('push', (event) => {
     payload = { body: event.data ? event.data.text() : '' };
   }
 
+  // 제목은 보낸 사람 닉네임 (서버가 넣어 준다)
   const title = payload.title || '우리의 도화지';
   const options = {
-    body: payload.body || '짝꿍이 오늘을 남겼어요',
+    body: payload.body || '오늘을 남겼어요',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     // 같은 태그는 덮어써서 알림이 쌓이지 않게 (하루 상한과 별개로 체감 소음 방지)
