@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { calcStreak, monthGrid } from '../../shared/lib/daily';
+import PushInvite from '../push/PushInvite';
 import { coordToRegion } from '../../shared/lib/kakao';
 import { paintDayCard } from '../../shared/lib/shareCard';
 import { supabase } from '../../shared/lib/supabase';
@@ -109,6 +110,9 @@ export default function TodayScreen() {
           <p className="rounded-full bg-yellow/40 px-3 py-1 text-sm font-bold">🔥 {streak}일째 함께</p>
         )}
       </header>
+
+      {/* 내가 남긴 직후 = 짝꿍 차례라는 맥락이 있는 자리 — 여기서만 알림을 권한다 */}
+      {participated && !isMock() && <PushInvite />}
 
       {participated && myEntry && !editing ? (
         <MyTodayCard
