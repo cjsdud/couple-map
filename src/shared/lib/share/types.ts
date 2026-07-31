@@ -1,0 +1,97 @@
+/**
+ * 공유 카드 렌더 엔진 — 타입 정의.
+ *
+ * 구조: 팔레트(색·폰트·질감) / 레이아웃(배치) / 장식(스티커·뱃지)을 분리한다.
+ * 사용자에게는 "스타일" 프리셋 하나로만 노출하고, 조합은 내부에서만 만든다
+ * (docs/share-card-v2-plan.md §3).
+ */
+
+/** 팔레트 키 — 화면에서는 '테마'로 부른다 */
+export type ShareTheme = 'paper' | 'film' | 'mono' | 'sunset' | 'vintage' | 'pastel';
+
+/** 비율 3종 (계획 §6) */
+export type ShareRatio = 'feed' | 'square' | 'story';
+
+export interface CardSize {
+  key: ShareRatio;
+  label: string;
+  /** 버튼 아래 안내 문구 */
+  hint: string;
+  w: number;
+  h: number;
+  /**
+   * 인스타 UI(프로필·답장창)가 덮는 위·아래 영역.
+   * 레이아웃은 이 안쪽에만 그린다 — 배경만 끝까지 채운다.
+   */
+  safeTop: number;
+  safeBottom: number;
+}
+
+export interface PhotoTint {
+  /**
+   * separable 모드만 허용 (soft-light 등). 'saturation' 같은 non-separable 블렌드는
+   * 브라우저(특히 WebKit·인앱 WebView)마다 동작이 갈려 사진이 아예 안 보일 수 있다 —
+   * 채도 낮추기는 photoDesaturate(픽셀 연산)로만 한다.
+   */
+  mode: GlobalCompositeOperation;
+  color: string;
+  alpha: number;
+}
+
+/** 팔레트 — 색·폰트·사진 보정·질감. 배치는 모른다. */
+export interface Skin {
+  ink: string; // 본문 텍스트
+  /** 제목·날짜·통계용 폰트 패밀리 */
+  title: string;
+  /** 본문·인용·라벨용 폰트 패밀리 */
+  body: string;
+  headerDeco: 'tape' | 'rule'; // 제목 위 장식 (마스킹테이프 / 짧은 선)
+  frame: { mat: string; pad: number; radius: number; shadow: number; border: string | null };
+  /** 사진 채도 낮추기 0(원본)~1(흑백) — 모든 브라우저에서 동일하게 동작하는 픽셀 연산 */
+  photoDesaturate?: number;
+  /** 사진 위 색보정 (테마 톤으로 통일) */
+  photoTint: PhotoTint[];
+  /** 필름/종이 그레인 세기 (0 = 없음) */
+  grain: number;
+  bubbleMe: string;
+  bubblePartner: string;
+  bubbleAlpha: number;
+  bubbleInk: string;
+  badgeBg: string;
+  badgeInk: string;
+  /** 어두운 배경인가 — 그라데이션·낙서 색을 고를 때 쓴다 */
+  dark: boolean;
+  /** 카드별 기본 강조색(pink/yellow/green)을 테마에 맞게 변환 */
+  accentFor: (base: string) => string;
+  paintBg: (p: Painter) => void;
+}
+
+/**
+ * 페인터 — 캔버스 + 좌표 변환.
+ *
+ * 레이아웃은 **1080×1350 기준 좌표**로만 쓰고, 실제 비율 변환은 여기서 흡수한다.
+ * 그래서 레이아웃 코드 하나가 피드·정사각·스토리 3종을 모두 그린다.
+ */
+export interface Painter {
+  ctx: CanvasRenderingContext2D;
+  /** 캔버스 실제 크기 */
+  W: number;
+  H: number;
+  size: CardSize;
+  skin: Skin;
+  /** 가로 배율 (1080 기준) — 글자·선 굵기에 곱한다 */
+  s: number;
+  /** 1080 기준 x → 실제 x */
+  x: (v: number) => number;
+  /** 1350 기준 y → 실제 y (안전 영역 반영) */
+  y: (v: number) => number;
+  /** 1350 기준 세로 길이 → 실제 길이 */
+  vh: (v: number) => number;
+  /** 내용 영역 위·아래 경계 (실제 픽셀) */
+  top: number;
+  bottom: number;
+  /** 폰트 문자열 — 크기는 1080 기준으로 넣으면 배율이 적용된다 */
+  font: (family: string, size: number, weight?: number) => string;
+  /** 이모지(기분)는 시스템 이모지 폰트로 */
+  emoji: (size: number) => string;
+}
