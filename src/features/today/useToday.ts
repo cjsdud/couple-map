@@ -4,6 +4,7 @@ import { daysAgo, entryDateFor, toDateString } from '../../shared/lib/daily';
 import { prepareUpload } from '../../shared/lib/image';
 import { supabase } from '../../shared/lib/supabase';
 import { useCoupleState } from '../couple/useCoupleState';
+import { logActivity } from '../activity/useActivity';
 import { notifyPartnerToday } from '../push/notifyPartner';
 
 /** daily_entries_unlocked 뷰 행 — answer 상호 잠금은 DB가 강제 (0002_rls.sql, 0008_daily_note.sql) */
@@ -126,7 +127,8 @@ export function useUploadPhoto(ctx: { coupleId?: string; userId?: string; entryD
       // 사진은 잔디 인정 요소가 아니므로 grass/streak 무효화는 불필요
       void queryClient.invalidateQueries({ queryKey: ['daily-entries'] });
       void queryClient.invalidateQueries({ queryKey: ['daily-photos'] });
-      // 내가 올린 순간 짝꿍 쪽 잠금이 풀린다 — 그걸 알린다
+      // 내가 올린 순간 짝꿍 쪽 잠금이 풀린다 — 그걸 알린다 (보관함에도 한 줄)
+      void logActivity('today', '오늘을 남겼어요', { coupleId: ctx.coupleId });
       void notifyPartnerToday();
     },
   });
@@ -220,6 +222,7 @@ export function useSaveToday(ctx: {
       void queryClient.invalidateQueries({ queryKey: ['daily-entries'] });
       void queryClient.invalidateQueries({ queryKey: ['grass'] });
       void queryClient.invalidateQueries({ queryKey: ['streak'] });
+      void logActivity('today', '오늘을 남겼어요', { coupleId: ctx.coupleId });
       void notifyPartnerToday();
     },
   });

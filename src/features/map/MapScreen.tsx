@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSession } from '../../shared/lib/auth';
 import { KAKAO_JS_KEY } from '../../shared/lib/kakaoMap';
 import PhotoViewer from '../../shared/ui/PhotoViewer';
+import ActivityBell from '../activity/ActivityBell';
 import { useCoupleState } from '../couple/useCoupleState';
 import { DayDetailSheet } from '../today/TodayScreen';
 import ConquestMap from './ConquestMap';
@@ -74,21 +75,24 @@ export default function MapScreen() {
             </span>
           </p>
         </div>
-        <div className="flex rounded-full border border-ink/15 bg-white/60 p-0.5 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setView('map')}
-            className={`rounded-full px-3 py-1.5 ${view === 'map' ? 'bg-ink text-paper' : 'opacity-60'}`}
-          >
-            지도
-          </button>
-          <button
-            type="button"
-            onClick={() => setView('timeline')}
-            className={`rounded-full px-3 py-1.5 ${view === 'timeline' ? 'bg-ink text-paper' : 'opacity-60'}`}
-          >
-            타임라인
-          </button>
+        <div className="flex items-center gap-2">
+          <ActivityBell />
+          <div className="flex rounded-full border border-ink/15 bg-white/60 p-0.5 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setView('map')}
+              className={`rounded-full px-3 py-1.5 ${view === 'map' ? 'bg-ink text-paper' : 'opacity-60'}`}
+            >
+              지도
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('timeline')}
+              className={`rounded-full px-3 py-1.5 ${view === 'timeline' ? 'bg-ink text-paper' : 'opacity-60'}`}
+            >
+              타임라인
+            </button>
+          </div>
         </div>
       </header>
 

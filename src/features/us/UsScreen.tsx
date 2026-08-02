@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { signOut, useSession } from '../../shared/lib/auth';
+import ActivityBell from '../activity/ActivityBell';
 import { usePush } from '../push/usePush';
 import { calcStreak, entryDateFor, toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
@@ -43,7 +44,10 @@ export default function UsScreen() {
 
   return (
     <main className="space-y-4 px-4 py-6">
-      <h1 className="text-2xl font-bold">우리</h1>
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">우리</h1>
+        <ActivityBell />
+      </header>
       <DdayCard startedAt={startedAt} today={today} coupleId={couple?.id} mock={isMock} />
       <ExpenseMonthCard today={today} onOpen={() => setExpenseOpen(true)} />
       <ThemeCard couple={couple} userId={userId} mock={isMock} />

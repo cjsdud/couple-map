@@ -1,7 +1,8 @@
 // 짝꿍에게 알림 보내기 (Vercel Fn)
 //
-// 트리거는 하나뿐이다 — "내가 오늘을 남겼다" → 짝꿍에게 알림.
-// 상호 잠금이 풀리는 순간이라 이 앱에서 유일하게 시간이 중요한 사건이다.
+// 보낼 수 있는 사건은 아래 화이트리스트뿐이다 — "짝꿍이 지금 알아야 의미 있는" 것만.
+// 삭제·설정 변경 같은 일은 푸시하지 않고 보관함(activity_log)에만 남는다
+// (지웠다는 푸시는 사실이라도 감정을 건드린다 — backlog §6).
 // 마케팅성 발송은 만들지 않는다 (명세 §5 다크패턴 금지).
 //
 // 안전장치:
@@ -30,9 +31,14 @@ const DAILY_LIMIT = 3;
  * 알림 문구 — 제목은 **보낸 사람 닉네임**으로 둔다.
  * iOS는 제목 아래에 "from 도화지"(홈 화면 앱 이름)를 스스로 붙이는데 그 줄은 손댈 수 없다.
  * 그래서 우리가 제어 가능한 제목에 이름을 넣어야 "누가 남겼는지"가 한눈에 들어온다.
+ *
+ * 이 맵이 곧 화이트리스트다 — 여기 없는 kind는 클라이언트가 뭐라 보내든 400.
+ * url은 알림을 누르면 열릴 탭 (push-sw.js가 그대로 연다).
  */
-const MESSAGE_BODY: Record<string, string> = {
-  today: '오늘을 남겼어요 🎨',
+const MESSAGES: Record<string, { body: string; url: string }> = {
+  today: { body: '오늘을 남겼어요 🎨', url: '/?tab=today' },
+  record_create: { body: '지도에 새 핀을 콕 찍었어요 🖍️', url: '/?tab=map' },
+  anniversary_create: { body: '새 기념일을 달아 뒀어요 💛', url: '/?tab=us' },
 };
 
 /** base64url 문자열이 실제 몇 바이트인지 — 키 값 노출 없이 원인을 짚기 위한 진단용 */
@@ -57,8 +63,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   try {
     const { accessToken, kind = 'today' } = req.body ?? {};
-    const body = MESSAGE_BODY[kind];
-    if (!accessToken || !body) {
+    const message = MESSAGES[kind];
+    if (!accessToken || !message) {
       res.status(400).json({ error: 'accessToken과 올바른 kind가 필요해요' });
       return;
     }
@@ -154,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 닉네임이 비어 있는 계정도 있어 '짝꿍'으로 폴백한다
     const senderName = (me.nickname as string | null)?.trim() || '짝꿍';
-    const payload = JSON.stringify({ title: senderName, body, tag: kind, url: '/?tab=today' });
+    const payload = JSON.stringify({ title: senderName, body: message.body, tag: kind, url: message.url });
 
     let sent = 0;
     const dead: string[] = [];

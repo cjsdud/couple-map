@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { prepareUpload } from '../../shared/lib/image';
 import { supabase } from '../../shared/lib/supabase';
+import { logActivity } from '../activity/useActivity';
+import { notifyPartner } from '../push/notifyPartner';
 
 /** 기본 5종 + 자유 입력 허용 (사용자 결정, 0010 마이그레이션) — 커스텀은 입력한 텍스트 그대로 저장 */
 export type ExpenseCategory = string;
@@ -504,9 +506,19 @@ export function useCreateRecord(coupleId: string | undefined) {
       await uploadNewPhotos(coupleId, recordId, draft.photos, spotIdBySeq, 0);
       return recordId;
     },
-    onSuccess: () => {
+    onSuccess: (recordId, draft) => {
       void queryClient.invalidateQueries({ queryKey: ['records'] });
       void queryClient.invalidateQueries({ queryKey: ['conquest'] });
+      // 보관함 + 푸시 (푸시 여부는 서버 화이트리스트가 정한다)
+      const spot = draft.spots[0]?.name?.trim();
+      void logActivity(
+        'record_create',
+        draft.status === 'planned'
+          ? `${spot ?? '새 장소'}, 가고 싶은 곳으로 콕 찍었어요`
+          : `${spot ?? '새'} 데이트를 남겼어요`,
+        { coupleId, targetId: recordId },
+      );
+      void notifyPartner('record_create');
     },
   });
 }
@@ -670,6 +682,11 @@ export function useUpdateRecord(coupleId: string | undefined) {
       return draft;
     },
     onSuccess: (draft) => {
+      const spot = draft.spots[0]?.name?.trim();
+      void logActivity('record_update', `${spot ?? draft.date} 기록을 고쳤어요`, {
+        coupleId,
+        targetId: draft.recordId,
+      });
       if (isMock()) {
         // invalidate하면 목데이터로 되돌아가므로 캐시를 직접 바꾼다 (useMarkVisited와 동일)
         queryClient.setQueryData<RecordRow[]>(['records'], (prev) =>
@@ -723,6 +740,12 @@ export function useDeleteRecord() {
       return recordId;
     },
     onSuccess: (recordId) => {
+      // invalidate 전에 캐시에서 이름을 건진다 — 지운 뒤에는 서버에 물어볼 수 없다
+      const gone = queryClient
+        .getQueryData<RecordRow[]>(['records'])
+        ?.find((r) => r.id === recordId);
+      const label = gone?.spots[0]?.name?.trim() || gone?.date;
+      void logActivity('record_delete', `${label ?? '기록'} 기록을 지웠어요`);
       if (isMock()) {
         queryClient.setQueryData<RecordRow[]>(['records'], (prev) =>
           prev?.filter((r) => r.id !== recordId),

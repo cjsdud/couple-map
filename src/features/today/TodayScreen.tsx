@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { calcStreak, monthGrid } from '../../shared/lib/daily';
+import ActivityBell from '../activity/ActivityBell';
 import PushInvite from '../push/PushInvite';
 import { coordToRegion } from '../../shared/lib/kakao';
 import {
@@ -113,9 +114,12 @@ export default function TodayScreen() {
           <h1 className="text-2xl font-bold">오늘</h1>
           <p className="text-sm opacity-70">{entryDate}</p>
         </div>
-        {streak > 0 && (
-          <p className="rounded-full bg-yellow/40 px-3 py-1 text-sm font-bold">🔥 {streak}일째 함께</p>
-        )}
+        <div className="flex items-center gap-2">
+          {streak > 0 && (
+            <p className="rounded-full bg-yellow/40 px-3 py-1 text-sm font-bold">🔥 {streak}일째 함께</p>
+          )}
+          <ActivityBell />
+        </div>
       </header>
 
       {/* 내가 남긴 직후 = 짝꿍 차례라는 맥락이 있는 자리 — 여기서만 알림을 권한다 */}

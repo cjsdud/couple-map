@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
+import { logActivity } from '../activity/useActivity';
 import { coupleStateKey } from '../couple/useCoupleState';
+import { notifyPartner } from '../push/notifyPartner';
 
 const DAY_MS = 86_400_000;
 
@@ -82,7 +84,11 @@ export function useAddAnniversary(coupleId: string | undefined) {
         .insert({ couple_id: coupleId, title: draft.title, date: draft.date, kind: 'custom' });
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['anniversaries'] }),
+    onSuccess: (_, draft) => {
+      void queryClient.invalidateQueries({ queryKey: ['anniversaries'] });
+      void logActivity('anniversary_create', `‘${draft.title}’ 기념일을 달았어요`, { coupleId });
+      void notifyPartner('anniversary_create');
+    },
   });
 }
 
@@ -94,7 +100,15 @@ export function useDeleteAnniversary() {
       const { error } = await supabase.from('anniversaries').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['anniversaries'] }),
+    onSuccess: (_, id) => {
+      // invalidate 전에 캐시에서 이름을 건진다
+      const title = queryClient
+        .getQueriesData<Anniversary[]>({ queryKey: ['anniversaries'] })
+        .flatMap(([, list]) => list ?? [])
+        .find((a) => a.id === id)?.title;
+      void queryClient.invalidateQueries({ queryKey: ['anniversaries'] });
+      void logActivity('anniversary_delete', title ? `‘${title}’ 기념일을 지웠어요` : '기념일 하나를 지웠어요');
+    },
   });
 }
 
@@ -126,9 +140,16 @@ export function useUpdateCouple(coupleId: string | undefined, userId: string | u
       const { error } = await supabase.from('couples').update(patch).eq('id', coupleId);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_, patch) => {
       if (userId) void queryClient.invalidateQueries({ queryKey: coupleStateKey(userId) });
       void queryClient.invalidateQueries({ queryKey: ['daily-entries'] });
+      // 보관함에만 남긴다 — 설정 변경까지 폰을 울리면 성가시다 (backlog §6)
+      const isTheme = patch.theme !== undefined;
+      void logActivity(
+        isTheme ? 'couple_theme' : 'couple_settings',
+        isTheme ? '도화지 옷을 갈아입혔어요' : '우리 설정을 매만졌어요',
+        { coupleId },
+      );
     },
   });
 }
