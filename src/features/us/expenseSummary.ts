@@ -23,7 +23,11 @@ export function summarizeMonth(records: RecordRow[], monthKey: string) {
   const byCategory = new Map<string, number>();
   for (const e of rows) byCategory.set(e.category, (byCategory.get(e.category) ?? 0) + e.amount);
   const byPayer = new Map<string, number>();
-  for (const e of rows) if (e.paid_by) byPayer.set(e.paid_by, (byPayer.get(e.paid_by) ?? 0) + e.amount);
+  let together = 0; // paid_by가 비어 있는 항목 = 함께 낸 것
+  for (const e of rows) {
+    if (e.paid_by) byPayer.set(e.paid_by, (byPayer.get(e.paid_by) ?? 0) + e.amount);
+    else together += e.amount;
+  }
 
   return {
     monthRecords,
@@ -32,7 +36,62 @@ export function summarizeMonth(records: RecordRow[], monthKey: string) {
     average: dateCount > 0 ? Math.round(total / dateCount) : 0,
     categories: [...byCategory.entries()].sort((a, b) => b[1] - a[1]),
     byPayer,
+    together,
   };
+}
+
+export interface PayerShare {
+  key: string;
+  name: string;
+  amount: number;
+  /** 전체 대비 % (0~100) */
+  pct: number;
+  /** 막대 색 (도화지 팔레트) */
+  bar: string;
+}
+
+/**
+ * 낸 사람별 금액·비율.
+ *
+ * 순서는 **금액순이 아니라 나 → 짝꿍 → 함께로 고정**한다. 금액순으로 세우면 순위표가 되고,
+ * 그건 명세 §3.3·§5.4가 금지하는 정산 압박이다. 여기서는 '누가 이겼나'가 아니라
+ * 이번 달 몫이 어떻게 나뉘었는지만 보여 준다.
+ */
+export function payerShares(
+  summary: { byPayer: Map<string, number>; together: number; total: number },
+  myUserId: string | undefined,
+  nameOf: (userId: string | null) => string,
+): PayerShare[] {
+  const { byPayer, together, total } = summary;
+  const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
+
+  // 내가 먼저, 그다음 나머지 사람들, 마지막이 '함께' — 금액과 무관한 고정 순서
+  const ids = [...byPayer.keys()].sort((a, b) => {
+    if (a === myUserId) return -1;
+    if (b === myUserId) return 1;
+    return 0;
+  });
+  const bars = ['bg-sky/80', 'bg-pink/70', 'bg-yellow/80'];
+  const shares: PayerShare[] = ids.map((id, i) => {
+    const amount = byPayer.get(id) ?? 0;
+    return {
+      key: id,
+      name: nameOf(id),
+      amount,
+      pct: pct(amount),
+      bar: id === myUserId ? bars[0] : bars[Math.min(i + (myUserId ? 0 : 1), bars.length - 1)],
+    };
+  });
+  if (together > 0) {
+    shares.push({
+      key: 'together',
+      name: '함께',
+      amount: together,
+      pct: pct(together),
+      bar: 'bg-green/70',
+    });
+  }
+  return shares.filter((s) => s.amount > 0);
 }
 
 /**

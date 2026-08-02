@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import { categoryLabel, useCoupleMembers, useRecords, type RecordRow } from '../map/useRecords';
-import { balanceLineOf, monthKeyOf, payerNameOf, summarizeMonth } from './expenseSummary';
+import {
+  balanceLineOf,
+  monthKeyOf,
+  payerNameOf,
+  payerShares,
+  summarizeMonth,
+} from './expenseSummary';
 
 /**
  * 가계부 상세 시트 — 우리 탭의 월간 카드를 누르면 열린다 (새 화면 금지, 절대 규칙 1).
@@ -26,10 +32,13 @@ export default function ExpenseSheet({
   open,
   onClose,
   today,
+  userId,
   onSelectRecord,
 }: {
   open: boolean;
   onClose: () => void;
+  /** 로그인한 사람 — 낸 사람 목록에서 '나'를 맨 앞에 두기 위해 */
+  userId: string | undefined;
   /** 오늘(YYYY-MM-DD) — 처음 열 때 이 달을 보여주고, 다음 달로는 못 넘어가게 한다 */
   today: string;
   /** 지출 항목 탭 → 그 데이트 기록 상세 열기 */
@@ -41,12 +50,11 @@ export default function ExpenseSheet({
   const members = useCoupleMembers();
 
   const isCurrentMonth = view.year === thisYear && view.month === thisMonth;
-  const { monthRecords, total, dateCount, average, categories, byPayer } = summarizeMonth(
-    records,
-    monthKeyOf(view.year, view.month),
-  );
-  const nameOf = (userId: string | null) => payerNameOf(members.data, userId);
+  const summary = summarizeMonth(records, monthKeyOf(view.year, view.month));
+  const { monthRecords, total, dateCount, average, categories, byPayer } = summary;
+  const nameOf = (id: string | null) => payerNameOf(members.data, id);
   const balanceLine = balanceLineOf(byPayer, nameOf);
+  const shares = payerShares(summary, userId, nameOf);
 
   const goPrev = () =>
     setView((v) => (v.month === 1 ? { year: v.year - 1, month: 12 } : { year: v.year, month: v.month - 1 }));
@@ -134,6 +142,30 @@ export default function ExpenseSheet({
                 })}
               </ul>
             </section>
+
+            {shares.length > 0 && (
+              <section className="space-y-2">
+                <p className="text-xs font-semibold opacity-50">낸 사람</p>
+                <ul className="space-y-2">
+                  {shares.map((s2) => (
+                    <li key={s2.key}>
+                      <div className="flex items-baseline justify-between gap-2 text-sm">
+                        <span className="min-w-0 flex-1 truncate font-semibold">{s2.name}</span>
+                        <span className="shrink-0 tabular-nums opacity-70">
+                          {s2.amount.toLocaleString()}원 <span className="opacity-50">{s2.pct}%</span>
+                        </span>
+                      </div>
+                      <div className="mt-1 h-2 overflow-hidden rounded-full bg-ink/10">
+                        <div
+                          className={`h-full rounded-full ${s2.bar}`}
+                          style={{ width: `${Math.max(s2.pct, 2)}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             <p className="rounded-xl rounded-tl-sm bg-sky/25 px-3 py-2 text-sm">{balanceLine}</p>
 

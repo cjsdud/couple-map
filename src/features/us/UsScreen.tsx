@@ -60,6 +60,8 @@ export default function UsScreen() {
         open={expenseOpen}
         onClose={() => setExpenseOpen(false)}
         today={today}
+        // 미리보기에서도 '나'가 맨 앞에 오게 (MOCK_MEMBERS의 user_id와 맞춘다)
+        userId={userId ?? (isMock ? 'mock-me' : undefined)}
         onSelectRecord={setDetailRecordId}
       />
       {/* 가계부 시트 위에 겹쳐 뜬다 — 닫으면 보던 달로 그대로 돌아온다 */}
