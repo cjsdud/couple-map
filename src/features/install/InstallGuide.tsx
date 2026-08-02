@@ -14,6 +14,10 @@ import { copyCurrentLink, platformStep, type InstallStep } from '../../shared/li
  *
  * 로그인 전에도 열리므로 Supabase를 부르지 않는다 — 전부 정적이다.
  * 다크패턴 금지(명세 §5): 설치를 재촉하거나 닫기 어려운 요소를 두지 않는다.
+ *
+ * `/intro/card-*.jpg`는 앱의 진짜 렌더 엔진(shareCard)으로 구운 카드다.
+ * 안에 든 사진은 CC0·퍼블릭 도메인 사진(Openverse 경유 flickr/rawpixel)이라
+ * 출처 표기 의무가 없다 — 예시라는 건 alt/캡션에 적어 둔다.
  */
 const SITE = 'https://couple-map-azure.vercel.app';
 
@@ -61,13 +65,14 @@ function Hero() {
       <p aria-hidden className="text-5xl">🎨</p>
       <h1 className="mt-3 text-3xl font-bold">우리의 도화지</h1>
       <p className="mt-3 break-keep text-base leading-relaxed">
-        같이 다녀온 곳을 콕 찍으면
+        데이트 하나하나가
         <br />
-        <b className="text-pink">그 동네가 칠해지는</b> 커플 기록장
+        <b className="text-pink">둘만의 도화지에 얹는 색</b>이 돼요
       </p>
       <p className="mx-auto mt-4 max-w-xs break-keep text-sm leading-relaxed opacity-55">
-        데이트를 남기면 지도가 칠해지고, 오늘 하루를 남기면 짝꿍의 하루가 열려요.
-        둘만 보는 도화지에 함께 그려 나가요.
+        사진첩과 기억 속에만 두면 좋았던 날도 조금씩 흐려져요.
+        다녀온 곳을 콕 찍어 기록하면 그 동네가 칠해지고,
+        그렇게 채워진 도화지는 언제든 다시 펼쳐 볼 수 있어요.
       </p>
       <a
         href="#install"
@@ -155,16 +160,43 @@ function ShareIntro() {
       <SectionTitle
         eyebrow="자랑하기"
         title="인스타에 올릴 한 장이 바로 나와요"
-        desc="기록을 고르면 카드가 만들어져요. 우리가 칠한 지도를 그대로 담은 카드도 있고요. 지출은 카드에 담기지 않아요."
+        desc="바다에서 찍은 사진, 카페에서 찍은 사진을 고르면 그날 하루가 카드 한 장으로 정리돼요. 스타일 7가지 — 우리가 칠한 지도를 그대로 담는 카드도 있어요. 지출은 카드에 담기지 않아요."
       />
       <img
-        src="/intro/card-map.png"
-        alt="공유 카드 예시 — 칠한 지역이 표시된 전국 지도 카드"
+        src="/intro/card-date.jpg"
+        alt="공유 카드 예시 — 강릉 데이트의 바다·카페 사진 4장과 코스, 한마디가 담긴 카드"
         loading="lazy"
-        width={1080}
-        height={1350}
+        width={864}
+        height={1080}
         className="mt-5 w-full rounded-2xl rounded-tl-md border-2 border-ink/10 shadow-sm"
       />
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        <img
+          src="/intro/card-polaroid.jpg"
+          alt="폴라로이드 스타일 카드 — 바다 사진 한 장과 손글씨"
+          loading="lazy"
+          width={440}
+          height={550}
+          className="w-full rounded-xl rounded-tl-sm border-2 border-ink/10 shadow-sm"
+        />
+        <img
+          src="/intro/card-film.jpg"
+          alt="필름 테마 카드 — 어두운 배경에 사진 4장"
+          loading="lazy"
+          width={440}
+          height={550}
+          className="w-full rounded-xl rounded-tl-sm border-2 border-ink/10 shadow-sm"
+        />
+        <img
+          src="/intro/card-map.jpg"
+          alt="지도 카드 — 칠한 지역이 표시된 전국 지도"
+          loading="lazy"
+          width={440}
+          height={550}
+          className="w-full rounded-xl rounded-tl-sm border-2 border-ink/10 shadow-sm"
+        />
+      </div>
+      <p className="mt-2 text-center text-[11px] opacity-40">카드 속 사진은 예시예요</p>
     </section>
   );
 }
