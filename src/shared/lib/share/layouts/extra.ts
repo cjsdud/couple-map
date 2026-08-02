@@ -34,6 +34,8 @@ export interface ExtraCardData {
   date: string;
   /** 코스 — 티켓의 표에 줄줄이 들어간다 */
   spotNames?: string[];
+  /** 스팟별 한마디 (0016) — spotNames와 같은 순서. 있는 줄만 이름 아래에 붙는다 */
+  spotNotes?: (string | null)[];
   title?: string | null;
   subtitle?: string | null;
   caption?: string | null;
@@ -180,20 +182,24 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
   drawText(p, dotted(data.date), p.W / 2, p.y(cursor), p.x(tw - 80));
   cursor += 26;
 
-  // 가운데: 코스 표 — 번호 + 이름
-  const spots = (data.spotNames ?? []).slice(0, 5);
+  // 가운데: 코스 표 — 번호 + 이름, 한마디가 있으면 그 아래 한 줄 더
+  const spots = (data.spotNames ?? []).slice(0, 5).map((name, i) => ({
+    name,
+    note: data.spotNotes?.[i]?.trim() || null,
+  }));
+  const rowH = (note: string | null) => (note ? 98 : 62);
+  const tableH = spots.reduce((sum, sp) => sum + rowH(sp.note), 0);
   // 절취선은 코스가 끝나는 자리 바로 아래 — 코스가 짧을 때 빈 칸이 뜨지 않게
-  const tearY = Math.min(ty + th - 300, cursor + 62 + spots.length * 62 + 34);
+  const tearY = Math.min(ty + th - 300, cursor + 62 + tableH - 62 + 34);
   ctx.textAlign = 'left';
-  for (const [i, name] of spots.entries()) {
-    const y = cursor + 62 + i * 62;
+  let rowY = cursor + 62;
+  for (const [i, sp] of spots.entries()) {
     ctx.font = p.font(skin.title, 30, 700);
     ctx.fillStyle = accent;
-    drawText(p, String(i + 1), p.x(tx + 56), p.y(y), p.x(46));
-    ctx.font = p.font(skin.body, 38, 500);
+    drawText(p, String(i + 1), p.x(tx + 56), p.y(rowY), p.x(46));
     ctx.fillStyle = ink;
     ctx.globalAlpha = 0.9;
-    const fit = fitLines(p, name, {
+    const fit = fitLines(p, sp.name, {
       family: skin.body,
       size: 38,
       weight: 500,
@@ -201,19 +207,36 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
       maxLines: 1,
     });
     ctx.font = p.font(skin.body, fit.size, 500);
-    drawText(p, fit.lines[0] ?? '', p.x(tx + 110), p.y(y), p.x(tw - 166));
+    drawText(p, fit.lines[0] ?? '', p.x(tx + 110), p.y(rowY), p.x(tw - 166));
     ctx.globalAlpha = 1;
+    if (sp.note) {
+      // 한마디는 이름보다 작고 옅게 — 표의 주인공은 여전히 장소 이름이다
+      const noteFit = fitLines(p, sp.note, {
+        family: skin.body,
+        size: 28,
+        weight: 500,
+        maxWidth: 660,
+        maxLines: 1,
+      });
+      ctx.font = p.font(skin.body, noteFit.size, 500);
+      ctx.fillStyle = ink;
+      ctx.globalAlpha = 0.6;
+      drawText(p, noteFit.lines[0] ?? '', p.x(tx + 110), p.y(rowY + 40), p.x(tw - 166));
+      ctx.globalAlpha = 1;
+    }
     // 점선 밑줄 — 표 느낌
+    const lineY = rowY + (sp.note ? 60 : 20);
     ctx.strokeStyle = ink;
     ctx.globalAlpha = 0.15;
     ctx.lineWidth = 2 * p.s;
     ctx.setLineDash([6 * p.s, 8 * p.s]);
     ctx.beginPath();
-    ctx.moveTo(p.x(tx + 56), p.y(y + 20));
-    ctx.lineTo(p.x(tx + tw - 56), p.y(y + 20));
+    ctx.moveTo(p.x(tx + 56), p.y(lineY));
+    ctx.lineTo(p.x(tx + tw - 56), p.y(lineY));
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
+    rowY += rowH(sp.note);
   }
 
   // 절취선 + 좌우 반원 홈
@@ -338,8 +361,9 @@ export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCa
     y += ph + 56;
   }
 
-  // 본문 — 두 칸 느낌으로 좁게, 첫 줄만 살짝 크게
-  const caption = data.caption?.trim() || data.subtitle?.trim();
+  // 본문 — 문구가 비어 있으면 스팟 한마디를 대신 싣는다 (메모가 좋은 날에 어울리는 레이아웃이라)
+  const spotLine = data.spotNotes?.find((n) => n?.trim())?.trim();
+  const caption = data.caption?.trim() || spotLine || data.subtitle?.trim();
   if (caption) {
     const fit = fitLines(p, caption, {
       family: skin.body,

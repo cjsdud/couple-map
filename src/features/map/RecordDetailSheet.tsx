@@ -182,10 +182,16 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
             {spots.map((s, i) => (
               <li
                 key={s.id}
-                className="flex items-center gap-2 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2 text-sm"
+                className="rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2 text-sm"
               >
-                <span className="font-bold text-pink">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-pink">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                </div>
+                {/* 스팟별 한마디 (0016) — 번호 아래로 들여써 어느 장소 이야기인지 붙여 둔다 */}
+                {s.note && (
+                  <p className="mt-1 break-words pl-6 text-xs leading-relaxed opacity-65">{s.note}</p>
+                )}
               </li>
             ))}
           </ol>
@@ -355,6 +361,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     photoAlign,
                     date: record.date,
                     spotNames: spots.map((s) => s.name),
+                    spotNotes: spots.map((s) => s.note),
                     caption,
                     regionNames: shareRegionNames,
                     photoUrls,
@@ -374,6 +381,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     date: record.date,
                     title: spots[0]?.name ?? null,
                     subtitle: spots.map((s) => s.name).join('  →  '),
+                    spotNotes: spots.map((s) => s.note),
                     caption,
                     regionNames: shareRegionNames,
                     photoUrls,
