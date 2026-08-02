@@ -41,6 +41,8 @@ interface Props {
 
 const MAX_SPOTS = 5;
 const MAX_PHOTOS = 10;
+/** 스팟 한마디 길이 — 0016 마이그레이션의 check(char_length(note) <= 120)와 같은 값 */
+const MAX_SPOT_NOTE = 120;
 
 /**
  * 기록 작성 바텀시트 (명세 §3.1).
@@ -81,6 +83,7 @@ export default function RecordSheet({ open, onClose, coupleId, initial, editReco
             lng: s.lng,
             sigunguCode: s.sigungu_code,
             kakaoPlaceId: s.kakao_place_id,
+            note: s.note, // 이미 한마디가 있으면 입력칸이 펼쳐진 채로 보인다
           })),
       );
       setExpenses(
@@ -433,8 +436,18 @@ function SpotEditor({
   const [results, setResults] = useState<KakaoPlace[] | null>(null);
   const [busy, setBusy] = useState<'search' | 'here' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 방금 '+ 한마디'로 연 칸에만 커서를 준다 (수정 모드 프리필로 펼쳐진 칸은 건드리지 않음)
+  const [noteFocus, setNoteFocus] = useState<number | null>(null);
 
   const full = spots.length >= MAX_SPOTS;
+
+  /**
+   * 한마디 접힘/펼침은 note 값 자체로 판단한다 — null이면 접힘, 문자열이면 펼침.
+   * 별도 열림 상태를 두면 스팟을 빼거나 더할 때 인덱스가 어긋난다.
+   * 비운 채로 칸 밖을 누르면 다시 접히고, 저장할 때도 null로 나간다(useRecords의 spotNote).
+   */
+  const setNote = (i: number, note: string | null) =>
+    onChange(spots.map((s, j) => (j === i ? { ...s, note } : s)));
 
   const runSearch = async () => {
     if (!query.trim() || busy) return;
@@ -509,18 +522,48 @@ function SpotEditor({
           {spots.map((s, i) => (
             <li
               key={`${s.name}-${i}`}
-              className="flex items-center gap-2 rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2 text-sm"
+              className="rounded-xl rounded-tl-sm border border-ink/10 bg-white/70 px-3 py-2 text-sm"
             >
-              <span className="font-bold text-pink">{i + 1}</span>
-              <span className="min-w-0 flex-1 truncate">{s.name}</span>
-              <button
-                type="button"
-                aria-label={`${s.name} 빼기`}
-                onClick={() => onChange(spots.filter((_, j) => j !== i))}
-                className="-my-1.5 -mr-1.5 shrink-0 p-1.5 opacity-40"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-pink">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                {s.note == null && (
+                  <button
+                    type="button"
+                    aria-label={`${s.name}에 한마디 남기기`}
+                    onClick={() => {
+                      setNote(i, '');
+                      setNoteFocus(i);
+                    }}
+                    className="shrink-0 rounded-full border border-dashed border-ink/25 px-2 py-0.5 text-xs opacity-60"
+                  >
+                    + 한마디
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={`${s.name} 빼기`}
+                  onClick={() => onChange(spots.filter((_, j) => j !== i))}
+                  className="-my-1.5 -mr-1.5 shrink-0 p-1.5 opacity-40"
+                >
+                  ✕
+                </button>
+              </div>
+              {s.note != null && (
+                <input
+                  // 방금 누른 칸에만 커서가 간다 (mount 시점에만 적용되는 React 동작)
+                  autoFocus={noteFocus === i}
+                  value={s.note}
+                  aria-label={`${s.name} 한마디`}
+                  onChange={(e) => setNote(i, e.target.value)}
+                  onBlur={() => {
+                    if (!s.note?.trim()) setNote(i, null); // 비어 있으면 다시 접기
+                  }}
+                  maxLength={MAX_SPOT_NOTE}
+                  placeholder={status === 'visited' ? '여기선 뭐가 제일 좋았어?' : '여기서 뭘 해 보고 싶어?'}
+                  className="mt-1.5 w-full rounded-xl rounded-br-sm border border-ink/15 bg-white/60 px-3 py-1.5 text-sm outline-none placeholder:opacity-50 focus:border-pink"
+                />
+              )}
             </li>
           ))}
         </ol>
