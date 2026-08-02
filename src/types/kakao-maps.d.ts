@@ -50,7 +50,11 @@ declare namespace kakao.maps {
     map?: Map;
     position: LatLng;
     content: HTMLElement | string;
+    /** 콘텐츠 크기에 곱해지는 기준점 (0 = 왼쪽/위) */
+    xAnchor?: number;
     yAnchor?: number;
+    /** 콘텐츠가 마우스·터치 이벤트를 받을지 — 핀을 눌러 기록을 열려면 필요 */
+    clickable?: boolean;
     zIndex?: number;
   }
   class CustomOverlay {

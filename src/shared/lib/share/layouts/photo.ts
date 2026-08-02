@@ -9,6 +9,7 @@
 import { loadShareFonts } from '../../shareFonts';
 import {
   drawCover,
+  drawText,
   fitLines,
   loadImage,
   paintGrain,
@@ -25,6 +26,8 @@ import type { Painter, ShareRatio, ShareTheme } from '../types';
 export interface PhotoCardData {
   theme?: ShareTheme;
   ratio?: ShareRatio;
+  /** 사진 칸 배율 (사용자 슬라이더) */
+  photoScale?: number;
   /** 2026-07-25 */
   date: string;
   /** 큰 글씨 — 없으면 날짜를 쓴다 */
@@ -43,7 +46,7 @@ const dotted = (date: string) => date.replace(/-/g, '. ');
 
 // ── 풀블리드 ─────────────────────────────────────────────────────
 export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio);
+  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
   const { ctx, skin } = p;
   await loadShareFonts();
   const img = await loadImage(data.photoUrls[0] ?? '');
@@ -90,7 +93,7 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
     ctx.fillStyle = '#ffffff';
     ctx.globalAlpha = 0.72;
     const lines = wrapText(ctx, tags, p.x(1080 - 340), 1);
-    ctx.fillText(lines[0] ?? '', p.x(64), p.y(y));
+    drawText(p, lines[0] ?? '', p.x(64), p.y(y), p.x(1080 - 340));
     ctx.globalAlpha = 1;
     y -= 58;
   }
@@ -106,7 +109,7 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
     ctx.fillStyle = '#ffffff';
     ctx.globalAlpha = 0.9;
     for (const [i, line] of fit.lines.entries()) {
-      ctx.fillText(line, p.x(64), p.y(y - (fit.lines.length - 1 - i) * 52));
+      drawText(p, line, p.x(64), p.y(y - (fit.lines.length - 1 - i) * 52), p.x(952));
     }
     ctx.globalAlpha = 1;
     y -= fit.lines.length * 52 + 14;
@@ -121,7 +124,7 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
     });
     ctx.fillStyle = '#ffffff';
     ctx.globalAlpha = 0.8;
-    ctx.fillText(fit.lines[0] ?? '', p.x(64), p.y(y));
+    drawText(p, fit.lines[0] ?? '', p.x(64), p.y(y), p.x(952));
     ctx.globalAlpha = 1;
     y -= 66;
   }
@@ -134,14 +137,14 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
   });
   ctx.fillStyle = '#ffffff';
   for (const [i, line] of title.lines.entries()) {
-    ctx.fillText(line, p.x(64), p.y(y - (title.lines.length - 1 - i) * (title.size + 12)));
+    drawText(p, line, p.x(64), p.y(y - (title.lines.length - 1 - i) * (title.size + 12)), p.x(952));
   }
 
   ctx.textAlign = 'right';
   ctx.font = p.font(skin.body, 28, 600);
   ctx.fillStyle = '#ffffff';
   ctx.globalAlpha = 0.55;
-  ctx.fillText('우리의 도화지 🖍️', p.x(1080 - 64), p.y(1350 - 56));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(1350 - 56), p.x(320));
   ctx.globalAlpha = 1;
   ctx.shadowColor = 'transparent';
   ctx.textAlign = 'left';
@@ -149,7 +152,7 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
 
 // ── 폴라로이드 ───────────────────────────────────────────────────
 export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio);
+  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
   const { ctx, skin } = p;
   await loadShareFonts();
   const img = await loadImage(data.photoUrls[0] ?? '');
@@ -184,7 +187,8 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
   // 사진 — 폴라로이드 규칙대로 위·좌·우 여백은 같고 아래만 넓다
   const pad = p.x(46);
   const photoW = w - pad * 2;
-  const photoH = p.vh(760);
+  // 사진 칸 크기 — 슬라이더로 조절. 매트 안에서 위·좌·우 여백은 유지한다
+  const photoH = Math.min(h - pad * 2 - p.vh(150), p.vh(760) * p.photoScale);
   const px = -w / 2 + pad;
   const py = -h / 2 + pad;
   if (img) {
@@ -223,7 +227,7 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
     ctx.globalAlpha = 0.9;
     const baseY = py + photoH + p.vh(84);
     for (const [i, line] of fit.lines.entries()) {
-      ctx.fillText(line, 0, baseY + i * p.vh(56));
+      ctx.fillText(line, 0, baseY + i * p.vh(56), photoW);
     }
     ctx.globalAlpha = 1;
   }
@@ -231,11 +235,11 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
   ctx.textAlign = 'right';
   ctx.fillStyle = inkOnMat;
   ctx.globalAlpha = 0.5;
-  ctx.fillText(dotted(data.date), w / 2 - pad, h / 2 - p.vh(28));
+  ctx.fillText(dotted(data.date), w / 2 - pad, h / 2 - p.vh(28), photoW / 2);
   const dday = stickerTexts(data.stickers).find((t) => t.startsWith('D+'));
   if (dday) {
     ctx.textAlign = 'left';
-    ctx.fillText(dday, -w / 2 + pad, h / 2 - p.vh(28));
+    ctx.fillText(dday, -w / 2 + pad, h / 2 - p.vh(28), photoW / 2);
   }
   ctx.globalAlpha = 1;
   ctx.restore();
@@ -253,13 +257,13 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
     ctx.font = p.font(skin.body, 32, 700);
     ctx.fillStyle = skin.accentFor('#e8637c');
     ctx.textAlign = 'left';
-    ctx.fillText(wrapText(ctx, tags, p.x(1080 - 340), 1)[0] ?? '', p.x(64), p.y(1284));
+    drawText(p, wrapText(ctx, tags, p.x(1080 - 340), 1)[0] ?? '', p.x(64), p.y(1284), p.x(1080 - 340));
   }
   ctx.font = p.font(skin.body, 30, 600);
   ctx.fillStyle = skin.ink;
   ctx.globalAlpha = 0.5;
   ctx.textAlign = 'right';
-  ctx.fillText('우리의 도화지 🖍️', p.x(1080 - 64), p.y(1286));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(1286), p.x(320));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }

@@ -2,7 +2,7 @@
  * 스티커·뱃지 (계획 §5) — 레이아웃이 어울리는 자리에 **자동으로** 붙인다.
  * 사용자가 켜고 끄거나 위치를 옮기지 않는다. 자유도를 낮춰 실패를 없애는 쪽.
  */
-import { roundRect } from './draw';
+import { drawText, roundRect } from './draw';
 import type { Painter } from './types';
 
 export interface CardStickers {
@@ -58,7 +58,7 @@ export function pill(
   ctx.fill();
   ctx.fillStyle = opts.onDark ? '#1b1815' : skin.badgeInk;
   ctx.textAlign = 'center';
-  ctx.fillText(text, left + w / 2, y + p.vh(size * 0.35));
+  drawText(p, text, left + w / 2, y + p.vh(size * 0.35), w - p.x(16));
   ctx.textAlign = 'left';
   return w;
 }
@@ -119,7 +119,7 @@ export function rubberStamp(
   ctx.stroke();
   ctx.fillStyle = color;
   ctx.textAlign = 'center';
-  ctx.fillText(text, 0, p.vh(12));
+  ctx.fillText(text, 0, p.vh(12), w - p.x(20));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
   ctx.restore();
@@ -134,7 +134,7 @@ export function filmDateStamp(p: Painter, date: string, x: number, y: number) {
   ctx.shadowColor = 'rgba(255,150,40,0.75)';
   ctx.shadowBlur = 16 * p.s;
   ctx.fillStyle = '#ffb648';
-  ctx.fillText(date.replace(/-/g, ' '), p.x(x), p.y(y));
+  drawText(p, date.replace(/-/g, ' '), p.x(x), p.y(y), p.x(400));
   ctx.restore();
   ctx.textAlign = 'left';
 }

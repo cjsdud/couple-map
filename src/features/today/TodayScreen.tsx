@@ -823,15 +823,17 @@ export function DayDetailSheet({
             onClose={() => setShareOpen(false)}
             fileName={`dohwaji-${date}.png`}
             captionPlaceholder="한마디 남기기 (선택)"
+            photos={photoUrls.map((ph) => ph.signedUrl as string)}
             contentKey={`${photoUrls.length}-${question.data ? 1 : 0}-${myName ?? ''}`}
             styles={[
               {
                 key: 'day',
                 label: '하루 카드',
-                paint: (canvas, { theme, ratio, caption }) =>
+                paint: (canvas, o) =>
                   paintDayCard(canvas, {
-                    theme,
-                    ratio,
+                    theme: o.theme,
+                    ratio: o.ratio,
+                    photoScale: o.photoScale,
                     date,
                     myName: myName ?? undefined,
                     partnerName: partnerName ?? undefined,
@@ -842,8 +844,8 @@ export function DayDetailSheet({
                     question: question.data?.text ?? null,
                     myAnswer: myEntry?.answer ?? null,
                     partnerAnswer: partnerEntry?.answer ?? null,
-                    photoUrls: photoUrls.map((p) => p.signedUrl as string),
-                    caption: caption || null,
+                    photoUrls: o.photoUrls,
+                    caption: o.caption || null,
                     stickers: shareStickers,
                   }),
               },
@@ -853,30 +855,34 @@ export function DayDetailSheet({
                     {
                       key: 'fullbleed',
                       label: '사진 가득',
+                      maxPhotos: 1,
                       paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
                         paintFullBleedCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
+                          photoScale: o.photoScale,
                           date,
                           title: `${m}월 ${d}일의 우리`,
                           subtitle: null,
                           caption: o.caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],
-                          photoUrls: photoUrls.map((p) => p.signedUrl as string),
+                          photoUrls: o.photoUrls,
                           stickers: shareStickers,
                         }),
                     },
                     {
                       key: 'polaroid',
                       label: '폴라로이드',
+                      maxPhotos: 1,
                       paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
                         paintPolaroidCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
+                          photoScale: o.photoScale,
                           date,
                           caption: o.caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],
-                          photoUrls: photoUrls.map((p) => p.signedUrl as string),
+                          photoUrls: o.photoUrls,
                           stickers: shareStickers,
                         }),
                     },
@@ -891,10 +897,11 @@ export function DayDetailSheet({
                         paintFilmStripCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
+                          photoScale: o.photoScale,
                           date,
                           caption: o.caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],
-                          photoUrls: photoUrls.map((ph) => ph.signedUrl as string),
+                          photoUrls: o.photoUrls,
                           stickers: shareStickers,
                         }),
                     },

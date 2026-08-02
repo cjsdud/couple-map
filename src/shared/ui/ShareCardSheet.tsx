@@ -9,16 +9,22 @@ import {
 } from '../lib/shareCard';
 import BottomSheet from './BottomSheet';
 
-/** 페인터에 넘기는 선택값 — 스타일·테마·비율·문구 */
+/** 페인터에 넘기는 선택값 — 스타일·테마·비율·문구·사진 */
 export interface ShareOptions {
   theme: ShareTheme;
   ratio: ShareRatio;
   caption: string;
+  /** 사용자가 고른 사진 (고른 순서대로) */
+  photoUrls: string[];
+  /** 사진 칸 배율 (0.7~1.3) */
+  photoScale: number;
 }
 
 export interface ShareStyle {
   key: string;
   label: string;
+  /** 이 스타일이 쓰는 사진 장수 (기본 4) — 풀블리드처럼 한 장짜리는 1 */
+  maxPhotos?: number;
   /** 카드를 캔버스에 그리는 페인터 */
   paint: (canvas: HTMLCanvasElement, o: ShareOptions) => Promise<void>;
 }
@@ -31,6 +37,8 @@ interface Props {
    * docs/share-card-v2-plan.md §3). 1개면 선택 줄을 숨긴다.
    */
   styles: ShareStyle[];
+  /** 고를 수 있는 사진 전부 — 비어 있으면 사진 줄을 숨긴다 */
+  photos?: string[];
   fileName: string;
   /** 문구 입력의 초기값 (예: 기록 메모) */
   defaultCaption?: string;
@@ -51,6 +59,7 @@ export default function ShareCardSheet({
   open,
   onClose,
   styles,
+  photos = [],
   fileName,
   defaultCaption = '',
   captionPlaceholder = '문구 넣기 (선택)',
@@ -60,8 +69,25 @@ export default function ShareCardSheet({
   const [ratio, setRatio] = useState<ShareRatio>('feed');
   const [styleKey, setStyleKey] = useState(styles[0]?.key ?? '');
   const [caption, setCaption] = useState(defaultCaption);
+  const [picked, setPicked] = useState<number[]>([]);
+  const [scale, setScale] = useState(100);
   const applied = useDebounced(caption, 450);
   const style = styles.find((s) => s.key === styleKey) ?? styles[0];
+
+  // 스타일마다 쓰는 장수가 달라 고른 것을 앞에서부터 잘라 쓴다.
+  // 아직 고르지 않았으면 있는 순서대로 (지금까지와 같은 결과)
+  const maxPhotos = style?.maxPhotos ?? 4;
+  const order = picked.filter((i) => i < photos.length);
+  const chosen = (order.length ? order : photos.map((_, i) => i)).slice(0, maxPhotos);
+  const photoUrls = chosen.map((i) => photos[i]);
+  const toggle = (i: number) =>
+    setPicked((prev) => {
+      const base = prev.filter((n) => n < photos.length);
+      if (base.includes(i)) return base.filter((n) => n !== i);
+      // 한 장짜리 스타일에서는 방금 고른 것으로 바꿔치기 — 지웠다 고르는 수고를 없앤다
+      if (maxPhotos === 1) return [i];
+      return [...base, i];
+    });
 
   return (
     <BottomSheet open={open} onClose={onClose} title="공유 카드">
@@ -73,14 +99,30 @@ export default function ShareCardSheet({
             onPick={setStyleKey}
           />
         )}
+        {photos.length > 0 && (
+          <PhotoPicker
+            photos={photos}
+            chosen={chosen}
+            max={maxPhotos}
+            onToggle={toggle}
+            scale={scale}
+            onScale={setScale}
+          />
+        )}
         <ThemePicker theme={theme} onPick={setTheme} />
         <RatioPicker ratio={ratio} onPick={setRatio} />
         <CaptionField value={caption} onChange={setCaption} placeholder={captionPlaceholder} />
         {/* 스타일·테마·비율·문구·데이터 준비 상태가 바뀌면 새로 그린다 */}
         <CardPreview
-          key={`${style?.key}|${theme}|${ratio}|${applied}|${contentKey}`}
+          key={`${style?.key}|${theme}|${ratio}|${scale}|${chosen.join(',')}|${applied}|${contentKey}`}
           paint={(canvas) =>
-            style?.paint(canvas, { theme, ratio, caption: applied }) ?? Promise.resolve()
+            style?.paint(canvas, {
+              theme,
+              ratio,
+              caption: applied,
+              photoUrls,
+              photoScale: scale / 100,
+            }) ?? Promise.resolve()
           }
           fileName={fileName}
           note={SHARE_SIZES[ratio].note}
@@ -122,11 +164,78 @@ export function StylePicker({
   );
 }
 
+/**
+ * 사진 고르기 — 탭한 순서대로 카드에 들어간다.
+ * 한 장짜리 스타일(풀블리드 등)에서는 탭하면 그 사진으로 바뀐다.
+ */
+export function PhotoPicker({
+  photos,
+  chosen,
+  max,
+  onToggle,
+  scale,
+  onScale,
+}: {
+  photos: string[];
+  chosen: number[];
+  max: number;
+  onToggle: (i: number) => void;
+  scale: number;
+  onScale: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <p className="text-xs font-semibold opacity-50">사진</p>
+        <p className="text-xs opacity-40">
+          {max === 1 ? '한 장을 골라요' : `탭한 순서대로 · 최대 ${max}장`}
+        </p>
+      </div>
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {photos.map((url, i) => {
+          const at = chosen.indexOf(i);
+          return (
+            <button
+              key={url}
+              type="button"
+              onClick={() => onToggle(i)}
+              aria-label={`사진 ${i + 1} ${at >= 0 ? '빼기' : '넣기'}`}
+              className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl rounded-tl-sm border-2 active:translate-y-px ${
+                at >= 0 ? 'border-pink' : 'border-ink/15 opacity-50'
+              }`}
+            >
+              <img src={url} alt="" className="h-full w-full object-cover" />
+              {at >= 0 && (
+                <span className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-pink text-[11px] font-bold text-white">
+                  {max === 1 ? '✓' : at + 1}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <label className="mt-2 flex items-center gap-2">
+        <span className="shrink-0 text-xs font-semibold opacity-50">사진 크기</span>
+        <input
+          type="range"
+          min={70}
+          max={130}
+          step={5}
+          value={scale}
+          onChange={(e) => onScale(Number(e.target.value))}
+          className="h-1.5 w-full accent-pink"
+        />
+        <span className="w-10 shrink-0 text-right text-xs tabular-nums opacity-50">{scale}%</span>
+      </label>
+    </div>
+  );
+}
+
 /** 비율 고르기 — 세로(4:5)·정사각(1:1)·스토리(9:16) 3종 (계획 §6) */
 export function RatioPicker({ ratio, onPick }: { ratio: ShareRatio; onPick: (r: ShareRatio) => void }) {
   return (
     <div>
-      <p className="mb-1.5 text-xs font-semibold opacity-50">크기</p>
+      <p className="mb-1.5 text-xs font-semibold opacity-50">비율</p>
       <div className="flex gap-2">
         {SHARE_RATIOS.map((r) => (
           <button

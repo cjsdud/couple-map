@@ -8,6 +8,7 @@
 import { loadShareFonts } from '../../shareFonts';
 import {
   drawCover,
+  drawText,
   fitLines,
   loadImage,
   paintGrain,
@@ -24,6 +25,8 @@ import type { Painter, ShareRatio, ShareTheme } from '../types';
 export interface ExtraCardData {
   theme?: ShareTheme;
   ratio?: ShareRatio;
+  /** 사진 칸 배율 (사용자 슬라이더) */
+  photoScale?: number;
   date: string;
   /** 코스 — 티켓의 표에 줄줄이 들어간다 */
   spotNames?: string[];
@@ -39,7 +42,7 @@ const dotted = (date: string) => date.replace(/-/g, '. ');
 
 // ── 필름 스트립 ──────────────────────────────────────────────────
 export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio);
+  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
   const { ctx, skin } = p;
   await loadShareFonts();
   const images = (await Promise.all(data.photoUrls.slice(0, 4).map(loadImage))).filter(
@@ -97,7 +100,7 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
   ctx.textAlign = 'center';
   ctx.font = p.font(skin.title, 40, 700);
   ctx.fillStyle = '#ffb648';
-  ctx.fillText(dotted(data.date), p.W / 2, p.y(baseY));
+  drawText(p, dotted(data.date), p.W / 2, p.y(baseY), p.x(820));
   const caption = data.caption?.trim() || data.subtitle?.trim();
   if (caption) {
     const fit = fitLines(p, caption, {
@@ -109,21 +112,21 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
     });
     ctx.fillStyle = '#efe7d8';
     ctx.globalAlpha = 0.85;
-    ctx.fillText(fit.lines[0] ?? '', p.W / 2, p.y(baseY + 54));
+    drawText(p, fit.lines[0] ?? '', p.W / 2, p.y(baseY + 54), p.x(820));
     ctx.globalAlpha = 1;
   }
   ctx.font = p.font(skin.body, 26, 600);
   ctx.fillStyle = '#efe7d8';
   ctx.globalAlpha = 0.45;
   ctx.textAlign = 'right';
-  ctx.fillText('우리의 도화지 🖍️', p.x(1080 - 96), p.y(1350 - 24));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 96), p.y(1350 - 24), p.x(300));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
 
 // ── 티켓 ─────────────────────────────────────────────────────────
 export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio);
+  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#e8637c');
   await loadShareFonts();
@@ -151,7 +154,7 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
   // 위쪽: 사진 띠 (있으면) + 제목
   let cursor = ty + 96;
   if (img) {
-    const ph = 300;
+    const ph = Math.round(300 * p.photoScale);
     ctx.save();
     // 티켓 모서리를 따라 자른다 — 사각으로 자르면 위 모서리가 각져 카드 밖으로 튀어 보인다
     roundRect(ctx, p.x(tx), p.y(ty), p.x(tw), p.vh(th), 22 * p.s);
@@ -168,7 +171,7 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
   ctx.textAlign = 'center';
   ctx.fillStyle = ink;
   ctx.font = p.font(skin.title, 56, 700);
-  ctx.fillText(dotted(data.date), p.W / 2, p.y(cursor));
+  drawText(p, dotted(data.date), p.W / 2, p.y(cursor), p.x(tw - 80));
   cursor += 26;
 
   // 가운데: 코스 표 — 번호 + 이름
@@ -180,7 +183,7 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
     const y = cursor + 62 + i * 62;
     ctx.font = p.font(skin.title, 30, 700);
     ctx.fillStyle = accent;
-    ctx.fillText(String(i + 1), p.x(tx + 56), p.y(y));
+    drawText(p, String(i + 1), p.x(tx + 56), p.y(y), p.x(46));
     ctx.font = p.font(skin.body, 38, 500);
     ctx.fillStyle = ink;
     ctx.globalAlpha = 0.9;
@@ -192,7 +195,7 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
       maxLines: 1,
     });
     ctx.font = p.font(skin.body, fit.size, 500);
-    ctx.fillText(fit.lines[0] ?? '', p.x(tx + 110), p.y(y));
+    drawText(p, fit.lines[0] ?? '', p.x(tx + 110), p.y(y), p.x(tw - 166));
     ctx.globalAlpha = 1;
     // 점선 밑줄 — 표 느낌
     ctx.strokeStyle = ink;
@@ -247,14 +250,14 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
   if (tags) {
     ctx.font = p.font(skin.body, 34, 700);
     ctx.fillStyle = accent;
-    ctx.fillText(wrapText(ctx, tags, p.x(tw - 80), 1)[0] ?? '', p.W / 2, p.y(sy));
+    drawText(p, wrapText(ctx, tags, p.x(tw - 80), 1)[0] ?? '', p.W / 2, p.y(sy), p.x(tw - 80));
     sy += 56;
   }
   if (capFit) {
     ctx.font = p.font(skin.body, capFit.size, 500);
     ctx.fillStyle = ink;
     ctx.globalAlpha = 0.85;
-    for (const [i2, line] of capFit.lines.entries()) ctx.fillText(line, p.W / 2, p.y(sy + i2 * 48));
+    for (const [i2, line] of capFit.lines.entries()) drawText(p, line, p.W / 2, p.y(sy + i2 * 48), p.x(tw - 80));
     ctx.globalAlpha = 1;
     sy += capFit.lines.length * 48 + 20;
   }
@@ -265,14 +268,14 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
   ctx.fillStyle = skin.ink;
   ctx.globalAlpha = 0.5;
   ctx.textAlign = 'right';
-  ctx.fillText('우리의 도화지 🖍️', p.x(1080 - 64), p.y(1286));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(1286), p.x(320));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
 
 // ── 매거진 ───────────────────────────────────────────────────────
 export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio);
+  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#e8637c');
   await loadShareFonts();
@@ -287,7 +290,7 @@ export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCa
   ctx.font = p.font(skin.body, 30, 700);
   ctx.fillStyle = accent;
   const head = [dotted(data.date), data.regionNames[0]].filter(Boolean).join('   ·   ');
-  ctx.fillText(head, p.x(m), p.y(140));
+  drawText(p, head, p.x(m), p.y(140), p.x(1080 - m * 2));
   ctx.strokeStyle = skin.ink;
   ctx.globalAlpha = 0.85;
   ctx.lineWidth = 4 * p.s;
@@ -309,13 +312,13 @@ export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCa
   ctx.font = p.font(skin.title, title.size, 700);
   ctx.fillStyle = skin.ink;
   for (const [i, line] of title.lines.entries()) {
-    ctx.fillText(line, p.x(m), p.y(268 + i * (title.size + 14)));
+    drawText(p, line, p.x(m), p.y(268 + i * (title.size + 14)), p.x(1080 - m * 2));
   }
   let y = 268 + title.lines.length * (title.size + 14) + 30;
 
   // 사진 — 넓은 가로 컷
   if (img) {
-    const ph = 560;
+    const ph = Math.round(560 * p.photoScale);
     const x = p.x(m);
     const w = p.x(1080 - m * 2);
     ctx.save();
@@ -342,7 +345,7 @@ export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCa
     ctx.fillStyle = skin.ink;
     ctx.globalAlpha = 0.85;
     for (const [i, line] of fit.lines.entries()) {
-      ctx.fillText(line, p.x(m), p.y(y + 40 + i * 54));
+      drawText(p, line, p.x(m), p.y(y + 40 + i * 54), p.x(1080 - m * 2));
     }
     ctx.globalAlpha = 1;
   }
@@ -354,7 +357,7 @@ export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCa
   ctx.fillStyle = skin.ink;
   ctx.globalAlpha = 0.5;
   ctx.textAlign = 'right';
-  ctx.fillText('우리의 도화지 🖍️', p.x(1080 - m), p.y(1290));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - m), p.y(1290), p.x(320));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }

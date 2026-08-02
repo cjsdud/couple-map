@@ -39,6 +39,15 @@ export function loadShareFonts(): Promise<void> {
         }
       }),
     );
+    // 등록 직후에는 캔버스가 아직 폴백 폰트로 글자 폭을 재는 경우가 있다.
+    // 그러면 measureText가 실제보다 좁게 나와, 가운데·오른쪽 정렬 글자가 카드 밖으로 밀린다.
+    // 한 번 로드를 강제하고 폰트 상태가 안정될 때까지 기다려 측정과 렌더를 맞춘다.
+    try {
+      await Promise.all(FILES.map((f) => document.fonts.load(`700 40px "${f.family}"`, '가나다ABC')));
+      await document.fonts.ready;
+    } catch {
+      // 지원하지 않는 브라우저 — 폴백 폰트로도 카드는 그려진다
+    }
   })();
   return loading;
 }

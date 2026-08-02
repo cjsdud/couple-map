@@ -260,20 +260,22 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
             fileName={`dohwaji-${record.date}.png`}
             defaultCaption={record.memo ?? ''}
             captionPlaceholder="한마디 남기기 (선택)"
+            photos={sharePhotoUrls}
             contentKey={`${sharePhotoUrls.length}-${shareRegionNames.length}-${mapPins.length}`}
             styles={[
               {
                 key: 'photo',
                 label: '사진 카드',
-                paint: (canvas, { theme, ratio, caption }) =>
+                paint: (canvas, { theme, ratio, caption, photoUrls, photoScale }) =>
                   paintRecordCard(canvas, {
                     theme,
                     ratio,
+                    photoScale,
                     date: record.date,
                     spotNames: spots.map((s) => s.name),
                     memo: caption,
                     regionNames: shareRegionNames,
-                    photoUrls: sharePhotoUrls,
+                    photoUrls,
                     stickers: shareStickers,
                   }),
               },
@@ -283,31 +285,35 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     {
                       key: 'fullbleed',
                       label: '사진 가득',
+                      maxPhotos: 1,
                       paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
                         paintFullBleedCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
+                          photoScale: o.photoScale,
                           date: record.date,
                           title: spots[0]?.name ?? null,
                           subtitle: spots.map((s) => s.name).join('  →  '),
                           caption: o.caption,
                           regionNames: shareRegionNames,
-                          photoUrls: sharePhotoUrls,
+                          photoUrls: o.photoUrls,
                           stickers: shareStickers,
                         }),
                     },
                     {
                       key: 'polaroid',
                       label: '폴라로이드',
+                      maxPhotos: 1,
                       paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
                         paintPolaroidCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
+                          photoScale: o.photoScale,
                           date: record.date,
                           subtitle: spots.map((s) => s.name).join('  →  '),
                           caption: o.caption,
                           regionNames: shareRegionNames,
-                          photoUrls: sharePhotoUrls,
+                          photoUrls: o.photoUrls,
                           stickers: shareStickers,
                         }),
                     },
@@ -322,11 +328,12 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                         paintFilmStripCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
+                          photoScale: o.photoScale,
                           date: record.date,
                           subtitle: spots.map((s) => s.name).join('  →  '),
                           caption: o.caption,
                           regionNames: shareRegionNames,
-                          photoUrls: sharePhotoUrls,
+                          photoUrls: o.photoUrls,
                           stickers: shareStickers,
                         }),
                     },
@@ -335,31 +342,35 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
               {
                 key: 'ticket',
                 label: '티켓',
-                paint: (canvas, { theme, ratio, caption }) =>
+                maxPhotos: 1,
+                paint: (canvas, { theme, ratio, caption, photoUrls, photoScale }) =>
                   paintTicketCard(canvas, {
                     theme,
                     ratio,
+                    photoScale,
                     date: record.date,
                     spotNames: spots.map((s) => s.name),
                     caption,
                     regionNames: shareRegionNames,
-                    photoUrls: sharePhotoUrls,
+                    photoUrls,
                     stickers: shareStickers,
                   }),
               },
               {
                 key: 'magazine',
                 label: '매거진',
-                paint: (canvas, { theme, ratio, caption }) =>
+                maxPhotos: 1,
+                paint: (canvas, { theme, ratio, caption, photoUrls, photoScale }) =>
                   paintMagazineCard(canvas, {
                     theme,
                     ratio,
+                    photoScale,
                     date: record.date,
                     title: spots[0]?.name ?? null,
                     subtitle: spots.map((s) => s.name).join('  →  '),
                     caption,
                     regionNames: shareRegionNames,
-                    photoUrls: sharePhotoUrls,
+                    photoUrls,
                     stickers: shareStickers,
                   }),
               },

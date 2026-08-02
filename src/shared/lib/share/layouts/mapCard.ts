@@ -6,6 +6,7 @@
  */
 import { loadShareFonts } from '../../shareFonts';
 import {
+  drawText,
   fitLines,
   heartDoodle,
   paintGrain,
@@ -58,14 +59,14 @@ export async function paintMapCard(canvas: HTMLCanvasElement, data: MapCardData)
     maxLines: 1,
   });
   ctx.font = p.font(skin.title, title.size, 700);
-  ctx.fillText(title.lines[0] ?? '', p.W / 2, p.y(222));
+  drawText(p, title.lines[0] ?? '', p.W / 2, p.y(222), p.x(920));
 
   let mapTop = 330;
   if (data.subtitle) {
     ctx.font = p.font(skin.body, 40, 600);
     ctx.globalAlpha = 0.85;
     const lines = wrapText(ctx, data.subtitle, p.x(880), 2);
-    for (const [i, line] of lines.entries()) ctx.fillText(line, p.W / 2, p.y(292 + i * 50));
+    for (const [i, line] of lines.entries()) drawText(p, line, p.W / 2, p.y(292 + i * 50), p.x(920));
     ctx.globalAlpha = 1;
     mapTop = 292 + lines.length * 50 + 26;
   }
@@ -101,7 +102,7 @@ export async function paintMapCard(canvas: HTMLCanvasElement, data: MapCardData)
     ctx.globalAlpha = 0.85;
     ctx.textAlign = 'center';
     const lines = wrapText(ctx, `“${caption}”`, p.x(880), 1);
-    ctx.fillText(lines[0] ?? '', p.W / 2, p.y(y));
+    drawText(p, lines[0] ?? '', p.W / 2, p.y(y), p.x(920));
     ctx.globalAlpha = 1;
   }
 

@@ -6,6 +6,7 @@
  */
 import { loadShareFonts } from '../../shareFonts';
 import {
+  drawText,
   heartDoodle,
   loadImage,
   paintGrain,
@@ -23,6 +24,8 @@ import type { Painter, ShareRatio, ShareTheme } from '../types';
 interface Common {
   theme?: ShareTheme;
   ratio?: ShareRatio;
+  /** 사진 칸 배율 (사용자 슬라이더) */
+  photoScale?: number;
   /** 자동으로 붙는 스티커 (계획 §5) */
   stickers?: CardStickers;
 }
@@ -38,7 +41,7 @@ export interface RecordCardData extends Common {
 
 /** 데이트 기록 카드 — 지출은 명세 §4 원칙대로 넣지 않는다 */
 export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio);
+  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#e8637c');
   await loadShareFonts();
@@ -50,20 +53,20 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
   ctx.fillStyle = skin.ink;
   ctx.textAlign = 'center';
   ctx.font = p.font(skin.title, 62, 700);
-  ctx.fillText(data.date.replace(/-/g, '. '), p.W / 2, p.y(222));
+  drawText(p, data.date.replace(/-/g, '. '), p.W / 2, p.y(222), p.x(900));
 
   ctx.font = p.font(skin.body, 44, 600);
   ctx.globalAlpha = 0.85;
   const course = data.spotNames.join('  →  ');
   for (const [i, line] of wrapText(ctx, course, p.x(1080 - 200), 2).entries()) {
-    ctx.fillText(line, p.W / 2, p.y(300 + i * 54));
+    drawText(p, line, p.W / 2, p.y(300 + i * 54), p.x(1080 - 160));
   }
   ctx.globalAlpha = 1;
 
   stickerRow(p, stickerTexts(data.stickers, 2), 372);
 
   const hasPhotos = images.some((i) => i !== null);
-  if (hasPhotos) paintPhotoGrid(p, images, 420, 620, data.photoUrls.length);
+  if (hasPhotos) paintPhotoGrid(p, images, 412, 700, data.photoUrls.length);
 
   if (data.memo) {
     ctx.fillStyle = skin.ink;
@@ -72,14 +75,14 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
     if (hasPhotos) {
       ctx.font = p.font(skin.body, 40, 500);
       for (const [i, line] of wrapText(ctx, `“${data.memo}”`, p.x(1080 - 150), 2).entries()) {
-        ctx.fillText(line, p.W / 2, p.y(1140 + i * 52));
+        drawText(p, line, p.W / 2, p.y(1168 + i * 52), p.x(1080 - 120));
       }
     } else {
       ctx.font = p.font(skin.body, 56, 500);
       const lines = wrapText(ctx, `“${data.memo}”`, p.x(1080 - 260), 4);
       const startY = 760 - ((lines.length - 1) * 72) / 2;
       for (const [i, line] of lines.entries()) {
-        ctx.fillText(line, p.W / 2, p.y(startY + i * 72));
+        drawText(p, line, p.W / 2, p.y(startY + i * 72), p.x(1080 - 200));
       }
     }
     ctx.globalAlpha = 1;
@@ -109,7 +112,7 @@ export interface DayCardData extends Common {
 }
 
 export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio);
+  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#f2c14e');
   await loadShareFonts();
@@ -122,7 +125,7 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
   ctx.textAlign = 'center';
   ctx.font = p.font(skin.title, 58, 700);
   const [y, m, d] = data.date.split('-');
-  ctx.fillText(`${y}년 ${Number(m)}월 ${Number(d)}일의 우리`, p.W / 2, p.y(216));
+  drawText(p, `${y}년 ${Number(m)}월 ${Number(d)}일의 우리`, p.W / 2, p.y(216), p.x(940));
 
   if (data.myMood || data.partnerMood) {
     ctx.font = p.emoji(110);
@@ -145,11 +148,11 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     ctx.textAlign = 'left';
     ctx.font = p.font(skin.body, 26, 700);
     ctx.globalAlpha = 0.6;
-    ctx.fillText(label, x + p.x(30), p.y(bubbleY - 8));
+    drawText(p, label, x + p.x(30), p.y(bubbleY - 8), w - p.x(40));
     ctx.globalAlpha = 1;
     ctx.font = p.font(skin.body, 38, 500);
     for (const [i, line] of lines.entries()) {
-      ctx.fillText(line, x + p.x(30), p.y(bubbleY + 56 + i * 50));
+      drawText(p, line, x + p.x(30), p.y(bubbleY + 56 + i * 50), w - p.x(50));
     }
     bubbleY += h + 56;
   };
@@ -164,7 +167,7 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     ctx.font = p.font(skin.body, 38, 700);
     ctx.globalAlpha = 0.9;
     for (const [i, line] of wrapText(ctx, `Q. ${data.question}`, p.x(1080 - 220), 2).entries()) {
-      ctx.fillText(line, p.W / 2, p.y(bubbleY + i * 50));
+      drawText(p, line, p.W / 2, p.y(bubbleY + i * 50), p.x(1080 - 180));
     }
     ctx.globalAlpha = 1;
     bubbleY += 76;
@@ -173,14 +176,14 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     if (data.myAnswer) {
       const lines = wrapText(ctx, `${myName} · ${data.myAnswer}`, p.x(1080 - 260), 2);
       for (const [i, line] of lines.entries()) {
-        ctx.fillText(line, p.W / 2, p.y(bubbleY + i * 46));
+        drawText(p, line, p.W / 2, p.y(bubbleY + i * 46), p.x(1080 - 200));
       }
       bubbleY += 52 + 46 * (lines.length - 1);
     }
     if (data.partnerAnswer) {
       const lines = wrapText(ctx, `${partnerName} · ${data.partnerAnswer}`, p.x(1080 - 260), 2);
       for (const [i, line] of lines.entries()) {
-        ctx.fillText(line, p.W / 2, p.y(bubbleY + i * 46));
+        drawText(p, line, p.W / 2, p.y(bubbleY + i * 46), p.x(1080 - 200));
       }
       bubbleY += 52;
     }
@@ -203,7 +206,7 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     ctx.font = p.font(skin.body, 42, 500);
     const lines = wrapText(ctx, `“${caption}”`, p.x(1080 - 240), 2);
     const capY = 1350 - 150 - (lines.length - 1) * 48;
-    for (const [i, line] of lines.entries()) ctx.fillText(line, p.W / 2, p.y(capY + i * 48));
+    for (const [i, line] of lines.entries()) drawText(p, line, p.W / 2, p.y(capY + i * 48), p.x(1080 - 180));
     ctx.globalAlpha = 1;
   }
 
@@ -221,7 +224,7 @@ export interface RecapCardData extends Common {
 }
 
 export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardData) {
-  const p: Painter = createPainter(canvas, data.theme, data.ratio);
+  const p: Painter = createPainter(canvas, data.theme, data.ratio, data.photoScale);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#8cab68');
   await loadShareFonts();
@@ -233,7 +236,7 @@ export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardD
   ctx.fillStyle = skin.ink;
   ctx.textAlign = 'center';
   ctx.font = p.font(skin.title, 60, 700);
-  ctx.fillText(data.title, p.W / 2, p.y(222));
+  drawText(p, data.title, p.W / 2, p.y(222), p.x(920));
 
   const hasPhotos = images.some((i) => i !== null);
 
@@ -244,16 +247,16 @@ export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardD
     const x = p.x(80 + colW * i + colW / 2);
     ctx.font = p.font(skin.title, hasPhotos ? 76 : 88, 700);
     ctx.fillStyle = accent;
-    ctx.fillText(s.value, x, p.y(statsTop + 74));
+    drawText(p, s.value, x, p.y(statsTop + 74), p.x(colW - 20));
     ctx.font = p.font(skin.body, 32, 600);
     ctx.fillStyle = skin.ink;
     ctx.globalAlpha = 0.7;
-    ctx.fillText(s.label, x, p.y(statsTop + 130));
+    drawText(p, s.label, x, p.y(statsTop + 130), p.x(colW - 12));
     ctx.globalAlpha = 1;
   }
 
   if (hasPhotos) {
-    paintPhotoGrid(p, images, 490, 560, data.photoTotal ?? data.photoUrls.length);
+    paintPhotoGrid(p, images, 480, 600, data.photoTotal ?? data.photoUrls.length);
   } else {
     heartDoodle(p, 540, 830, 300, accent);
   }
@@ -265,7 +268,7 @@ export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardD
     ctx.fillStyle = skin.ink;
     ctx.globalAlpha = 0.8;
     ctx.textAlign = 'center';
-    ctx.fillText(data.footer, p.W / 2, p.y(1128));
+    drawText(p, data.footer, p.W / 2, p.y(1128), p.x(1080 - 140));
     ctx.globalAlpha = 1;
   }
 

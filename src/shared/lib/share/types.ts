@@ -85,6 +85,8 @@ export interface Painter {
   skin: Skin;
   /** 가로 배율 (1080 기준) — 글자·선 굵기에 곱한다 */
   s: number;
+  /** 사진 칸 배율 — 사용자가 슬라이더로 정한다 (1 = 기본) */
+  photoScale: number;
   /** 1080 기준 x → 실제 x */
   x: (v: number) => number;
   /** 1350 기준 y → 실제 y (안전 영역 반영) */

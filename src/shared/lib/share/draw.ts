@@ -160,7 +160,11 @@ export function tuned(p: Painter, img: ImageBitmap | HTMLImageElement): Drawable
   return (p.skin.photoDesaturate ? desaturated(img, p.skin.photoDesaturate) : null) ?? img;
 }
 
-/** cover-fit 그리기 — 지정한 상자를 꽉 채우고 넘치는 부분은 잘라낸다 (실제 픽셀) */
+/**
+ * cover-fit 그리기 — 지정한 상자를 꽉 채우고 넘치는 부분은 잘라낸다 (실제 픽셀).
+ * bias: 세로로 어디를 남길지 (0 = 위, 0.5 = 가운데, 1 = 아래).
+ *   커플 사진은 인물이 많고 얼굴은 위쪽에 있어 기본을 살짝 위로 둔다 — 가운데로 자르면 얼굴이 잘린다.
+ */
 export function drawCover(
   ctx: CanvasRenderingContext2D,
   img: Drawable,
@@ -168,6 +172,7 @@ export function drawCover(
   y: number,
   w: number,
   h: number,
+  bias = 0.38,
 ) {
   const iw = img.width;
   const ih = img.height;
@@ -175,7 +180,19 @@ export function drawCover(
   const scale = Math.max(w / iw, h / ih);
   const sw = w / scale;
   const sh = h / scale;
-  ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
+  ctx.drawImage(img, (iw - sw) / 2, (ih - sh) * bias, sw, sh, x, y, w, h);
+}
+
+/**
+ * 글자 그리기 — 넘치면 그 자리에서 눌러 담는다.
+ *
+ * measureText로 잰 폭과 실제로 그려지는 폭은 어긋날 수 있다 (이모지가 섞이거나 웹폰트가
+ * 폴백으로 대체될 때). 가운데·오른쪽 정렬에서는 그 차이가 그대로 카드 밖으로 밀려 나가
+ * 글자가 잘려 보였다. fillText의 maxWidth는 브라우저가 강제로 폭을 맞춰 주므로
+ * 측정이 틀려도 카드를 벗어나지 않는다 — 마지막 방어선.
+ */
+export function drawText(p: Painter, text: string, x: number, y: number, maxWidth: number) {
+  p.ctx.fillText(text, x, y, Math.max(1, maxWidth));
 }
 
 /** 사진 위 테마 색보정 (실제 픽셀 상자) */
@@ -191,24 +208,25 @@ export function tintOver(p: Painter, x: number, y: number, w: number, h: number)
   ctx.globalAlpha = 1;
 }
 
-/** 사진 프레임 (테마별 매트·테두리·그림자) — 1080×1350 기준 좌표 */
-export function photoFrame(
+/**
+ * 사진 한 장 + 매트·테두리·그림자 — **실제 픽셀** 중심·크기를 받는다.
+ * 크기는 이미 사진 비율에 맞춰져 있다고 보고 그대로 채운다 (자르지 않는다).
+ */
+export function drawFramedPhoto(
   p: Painter,
   img: ImageBitmap | HTMLImageElement,
-  bx: number,
-  by: number,
-  bw: number,
-  bh: number,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
   deg: number,
 ) {
   const { ctx, skin } = p;
   const { mat, radius, shadow, border } = skin.frame;
   const pad = skin.frame.pad * p.s;
   const r = radius * p.s;
-  const w = p.x(bw);
-  const h = p.vh(bh);
   ctx.save();
-  ctx.translate(p.x(bx + bw / 2), p.y(by + bh / 2));
+  ctx.translate(cx, cy);
   ctx.rotate((deg * Math.PI) / 180);
   if (shadow > 0) {
     ctx.shadowColor = `rgba(20,16,12,${shadow})`;
@@ -230,7 +248,8 @@ export function photoFrame(
   ctx.save();
   roundRect(ctx, -w / 2 + pad, -h / 2 + pad, dw, dh, Math.max(2, r - 4 * p.s));
   ctx.clip();
-  drawCover(ctx, tuned(p, img), -w / 2 + pad, -h / 2 + pad, dw, dh);
+  // 비율을 맞춰 놨으므로 잘릴 일이 없다 (반올림 오차만 흡수)
+  drawCover(ctx, tuned(p, img), -w / 2 + pad, -h / 2 + pad, dw, dh, 0.5);
   tintOver(p, -w / 2 + pad, -h / 2 + pad, dw, dh);
   ctx.restore();
   ctx.restore();
@@ -322,7 +341,7 @@ export function paintRegionHashtags(p: Painter, names: string[], color: string) 
   // 워터마크(우하단)와 겹치지 않게 폭 제한
   const lines = wrapText(ctx, text, p.x(1080 - 360), 2);
   for (const [i, line] of lines.entries()) {
-    ctx.fillText(line, p.x(64), p.y(1350 - 66 - (lines.length - 1 - i) * 42));
+    drawText(p, line, p.x(64), p.y(1350 - 66 - (lines.length - 1 - i) * 42), p.x(1080 - 360));
   }
 }
 
@@ -332,12 +351,18 @@ export function paintWatermark(p: Painter, alpha = 0.5) {
   ctx.fillStyle = p.skin.ink;
   ctx.globalAlpha = alpha;
   ctx.textAlign = 'right';
-  ctx.fillText('우리의 도화지 🖍️', p.x(1080 - 64), p.y(1350 - 64));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(1350 - 64), p.x(320));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
 
-/** total: 전체 사진 수 — 그리드에 못 실린 만큼 마지막 프레임에 "+N" 스티커 */
+/**
+ * 사진 그리드 — 사진 비율을 보고 배치를 정한다.
+ *
+ * 칸을 꽉 채우려고 자르지 않는다. 대신 사진 비율에 맞춰 프레임 크기를 구하고,
+ * 그 실제 크기로 줄을 가운데 정렬한다 — 세로 사진만 있어도 좌우가 성겨 보이지 않는다.
+ * total: 전체 사진 수 — 그리드에 못 실린 만큼 마지막 프레임에 "+N" 스티커.
+ */
 export function paintPhotoGrid(
   p: Painter,
   images: (ImageBitmap | null)[],
@@ -348,31 +373,57 @@ export function paintPhotoGrid(
   const { ctx, skin } = p;
   const shots = images.filter((i): i is ImageBitmap => i !== null).slice(0, 4);
   if (shots.length === 0) return;
-  const cx = 540;
-  const places: [number, number, number, number, number][] = [];
-  if (shots.length === 1) {
-    places.push([cx - 400, top, 800, height, -1.6]);
-  } else if (shots.length === 2) {
-    places.push([cx - 420, top + 14, 410, height - 30, -2.2], [cx + 14, top, 410, height - 30, 1.8]);
-  } else {
-    const w = 405;
-    const h = (height - 26) / 2;
-    places.push(
-      [cx - 420, top, w, h, -2],
-      [cx + 16, top + 10, w, h, 1.6],
-      [cx - 414, top + h + 22, w, h, 1.4],
-    );
-    if (shots[3]) places.push([cx + 10, top + h + 30, w, h, -1.8]);
+
+  const pad = skin.frame.pad * p.s;
+  const areaX = p.x(64);
+  const areaW = p.x(952);
+  const areaY = p.y(top);
+  const areaH = p.vh(height);
+  const gap = 18 * p.s;
+  // 사진 크기 슬라이더 — 칸을 크게 넘어서면 서로 겹치므로 위쪽만 살짝 묶어 둔다
+  const scale = Math.min(1.12, p.photoScale);
+
+  const ars = shots.map((s) => (s.width && s.height ? s.width / s.height : 1));
+  const allPortrait = ars.every((a) => a < 0.95);
+  // 줄 나누기 — 세로 사진 3장은 한 줄에 나란히 놓아야 꽉 찬다
+  let rows: number[][];
+  if (shots.length === 1) rows = [[0]];
+  else if (shots.length === 2) rows = [[0, 1]];
+  else if (shots.length === 3) rows = allPortrait ? [[0, 1, 2]] : [[0, 1], [2]];
+  else rows = [[0, 1], [2, 3]];
+
+  const rowH = (areaH - gap * (rows.length - 1)) / rows.length;
+  const tilts = [-2, 1.6, 1.4, -1.8];
+  let lastCell: { cx: number; cy: number; w: number; h: number } | null = null;
+
+  for (const [r, row] of rows.entries()) {
+    const cellW = (areaW - gap * (row.length - 1)) / row.length;
+    const sizes = row.map((i) => {
+      const innerW = cellW - pad * 2;
+      const innerH = rowH - pad * 2;
+      let pw = innerW;
+      let ph = innerH;
+      if (innerW / innerH > ars[i]) pw = innerH * ars[i];
+      else ph = innerW / ars[i];
+      return { w: (pw + pad * 2) * scale, h: (ph + pad * 2) * scale };
+    });
+    const rowW = sizes.reduce((a, b) => a + b.w, 0) + gap * (row.length - 1);
+    let x = areaX + (areaW - rowW) / 2;
+    const bandY = areaY + r * (rowH + gap);
+    for (const [k, i] of row.entries()) {
+      const { w, h } = sizes[k];
+      const cx = x + w / 2;
+      const cy = bandY + rowH / 2;
+      drawFramedPhoto(p, shots[i], cx, cy, w, h, tilts[i % tilts.length]);
+      lastCell = { cx, cy, w, h };
+      x += w + gap;
+    }
   }
-  for (const [i, shot] of shots.entries()) {
-    const [x, y, w, h, deg] = places[i];
-    photoFrame(p, shot, x, y, w, h, deg);
-  }
+
   const extra = Math.max(0, total - shots.length);
-  if (extra > 0) {
-    const [x, y, w, h] = places[shots.length - 1];
-    const bx = p.x(x + w - 28);
-    const by = p.y(y + h - 28);
+  if (extra > 0 && lastCell) {
+    const bx = lastCell.cx + lastCell.w / 2 - 28 * p.s;
+    const by = lastCell.cy + lastCell.h / 2 - 28 * p.s;
     ctx.beginPath();
     ctx.arc(bx, by, 46 * p.s, 0, Math.PI * 2);
     ctx.fillStyle = skin.badgeBg;
@@ -382,6 +433,6 @@ export function paintPhotoGrid(
     ctx.font = p.font(skin.title, 34);
     ctx.fillStyle = skin.badgeInk;
     ctx.textAlign = 'center';
-    ctx.fillText(`+${extra}`, bx, by + 12 * p.s);
+    drawText(p, `+${extra}`, bx, by + 12 * p.s, 76 * p.s);
   }
 }
