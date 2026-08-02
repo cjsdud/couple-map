@@ -829,6 +829,8 @@ export function DayDetailSheet({
               {
                 key: 'day',
                 label: '하루 카드',
+                // 하루 카드는 사진을 2장까지만 싣는다 — 고르기 줄도 그 개수에 맞춘다
+                maxPhotos: 2,
                 paint: (canvas, o) =>
                   paintDayCard(canvas, {
                     theme: o.theme,

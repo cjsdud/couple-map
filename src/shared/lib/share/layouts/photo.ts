@@ -60,10 +60,11 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
   if (img) {
     drawCover(ctx, tuned(p, img), 0, 0, p.W, p.H, adj.focus);
     tintOver(p, 0, 0, p.W, p.H);
+    p.hits.push({ index: 0, cx: p.W / 2, cy: p.H / 2, w: p.W, h: p.H, deg: 0, crop: true });
   }
 
   // 글자가 놓일 아래쪽을 어둡게 — 사진이 밝아도 흰 글씨가 읽힌다
-  const gradTop = p.y(620);
+  const gradTop = p.y(p.LH - 730);
   const g = ctx.createLinearGradient(0, gradTop, 0, p.bottom);
   g.addColorStop(0, 'rgba(12,10,9,0)');
   g.addColorStop(0.4, 'rgba(12,10,9,0.42)');
@@ -91,7 +92,7 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
   ctx.textAlign = 'left';
 
   // 하단 블록 — 제목 → 코스 → 한마디 → 해시태그 순으로 쌓아 올린다
-  let y = 1350 - 78;
+  let y = p.LH - 78;
   const tags = toHashtags(data.regionNames);
   if (tags) {
     ctx.font = p.font(skin.body, 32, 700);
@@ -149,7 +150,7 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
   ctx.font = p.font(skin.body, 28, 600);
   ctx.fillStyle = '#ffffff';
   ctx.globalAlpha = 0.55;
-  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(1350 - 56), p.x(320));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(p.LH - 56), p.x(320));
   ctx.globalAlpha = 1;
   ctx.shadowColor = 'transparent';
   ctx.textAlign = 'left';
@@ -164,11 +165,12 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
 
   skin.paintBg(p);
 
-  // 폴라로이드 한 장 — 살짝 기울여 손으로 놓은 느낌
+  // 폴라로이드 한 장 — 살짝 기울여 손으로 놓은 느낌.
+  // 높이는 비율마다 남는 세로를 흡수한다 — 스토리는 길게, 정사각은 짧게.
   const cardX = 96;
-  const cardY = 150;
+  const cardY = 110;
   const cardW = 888;
-  const cardH = 1010;
+  const cardH = p.LH - cardY - 180;
   const adj = adjustAt(data.adjusts, 0, -1.4);
   const deg = adj.tilt;
   ctx.save();
@@ -194,7 +196,7 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
   const pad = p.x(46);
   const photoW = w - pad * 2;
   // 사진 칸 크기 — 사진별 설정. 매트 안에서 위·좌·우 여백은 유지한다
-  const photoH = Math.min(h - pad * 2 - p.vh(150), p.vh(760) * adj.scale);
+  const photoH = Math.min(h - pad * 2 - p.vh(150), p.vh(cardH - 250) * adj.scale);
   const px = -w / 2 + pad;
   const py = -h / 2 + pad;
   if (img) {
@@ -205,6 +207,19 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
     drawCover(ctx, tuned(p, img), px, py, photoW, photoH, adj.focus);
     tintOver(p, px, py, photoW, photoH);
     ctx.restore();
+    // 제스처 판정용 — 카드가 기울어 있으니 사진 중심을 회전시켜 실제 자리로 되돌린다
+    const rad = (deg * Math.PI) / 180;
+    const lx = px + photoW / 2;
+    const ly = py + photoH / 2;
+    p.hits.push({
+      index: 0,
+      cx: p.x(cardX + cardW / 2) + lx * Math.cos(rad) - ly * Math.sin(rad),
+      cy: p.y(cardY + cardH / 2) + lx * Math.sin(rad) + ly * Math.cos(rad),
+      w: photoW,
+      h: photoH,
+      deg,
+      crop: true,
+    });
   } else {
     ctx.fillStyle = skin.dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
     ctx.fillRect(px, py, photoW, photoH);
@@ -263,13 +278,13 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
     ctx.font = p.font(skin.body, 32, 700);
     ctx.fillStyle = skin.accentFor('#e8637c');
     ctx.textAlign = 'left';
-    drawText(p, wrapText(ctx, tags, p.x(1080 - 340), 1)[0] ?? '', p.x(64), p.y(1284), p.x(1080 - 340));
+    drawText(p, wrapText(ctx, tags, p.x(1080 - 340), 1)[0] ?? '', p.x(64), p.y(p.LH - 66), p.x(1080 - 340));
   }
   ctx.font = p.font(skin.body, 30, 600);
   ctx.fillStyle = skin.ink;
   ctx.globalAlpha = 0.5;
   ctx.textAlign = 'right';
-  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(1286), p.x(320));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(p.LH - 64), p.x(320));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }

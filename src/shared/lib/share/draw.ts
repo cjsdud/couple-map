@@ -165,11 +165,27 @@ export function paintHeaderDeco(p: Painter, color: string, deg: number, cy = 96)
   }
 }
 
+/** 채도 보정 결과 캐시 — 제스처 중 같은 카드를 연속으로 다시 그릴 때 픽셀 루프를 아낀다 */
+const desatCache = new WeakMap<Drawable, Map<number, HTMLCanvasElement | null>>();
+
 /**
  * 사진 채도 낮추기 — 픽셀 루프(휘도 혼합)라 어느 브라우저에서든 결과가 같다.
  * 실패(컨텍스트 미지원 등) 시 null — 호출부가 원본으로 폴백해 사진이 빠지는 일은 없다.
  */
 export function desaturated(img: Drawable, amount: number): HTMLCanvasElement | null {
+  let byAmount = desatCache.get(img);
+  if (!byAmount) {
+    byAmount = new Map();
+    desatCache.set(img, byAmount);
+  }
+  const hit = byAmount.get(amount);
+  if (hit !== undefined) return hit;
+  const made = desaturateNow(img, amount);
+  byAmount.set(amount, made);
+  return made;
+}
+
+function desaturateNow(img: Drawable, amount: number): HTMLCanvasElement | null {
   const iw = img.width;
   const ih = img.height;
   if (!iw || !ih) return null;
@@ -255,6 +271,7 @@ export function tintOver(p: Painter, x: number, y: number, w: number, h: number)
 /**
  * 사진 한 장 + 매트·테두리·그림자 — **실제 픽셀** 중심·크기를 받는다.
  * 크기는 이미 사진 비율에 맞춰져 있다고 보고 그대로 채운다 (자르지 않는다).
+ * hitIndex를 주면 이 자리를 제스처 판정용으로 기록한다.
  */
 export function drawFramedPhoto(
   p: Painter,
@@ -265,8 +282,10 @@ export function drawFramedPhoto(
   h: number,
   deg: number,
   focus = 0.5,
+  hitIndex?: number,
 ) {
   const { ctx, skin } = p;
+  if (hitIndex !== undefined) p.hits.push({ index: hitIndex, cx, cy, w, h, deg, crop: false });
   const { mat, radius, shadow, border } = skin.frame;
   const pad = skin.frame.pad * p.s;
   const r = radius * p.s;
@@ -329,6 +348,14 @@ export function paintGrain(p: Painter, strength = p.skin.grain) {
 const MAX_PHOTO_EDGE = 1400;
 
 /**
+ * 받아온 사진 캐시 — 미리보기에서 테마·비율을 바꾸거나 손가락으로 사진을 만질 때마다
+ * 카드를 새로 그리는데, 그때마다 서명 URL을 다시 받아오면 느려서 제스처가 뚝뚝 끊긴다.
+ * URL 기준으로 축소본을 들고 있는다 (시트 안 사진은 많아야 수십 장).
+ */
+const imageCache = new Map<string, Promise<Drawable | null>>();
+const IMAGE_CACHE_MAX = 40;
+
+/**
  * 사진 받아오기 — **항상 적당한 크기로 줄여서** 돌려준다.
  *
  * iOS Safari는 캔버스·이미지 메모리 한도가 낮아, 큰 원본을 여러 장 그리면 그중 일부가
@@ -338,6 +365,22 @@ const MAX_PHOTO_EDGE = 1400;
  */
 export async function loadImage(url: string): Promise<Drawable | null> {
   if (!url) return null;
+  let pending = imageCache.get(url);
+  if (!pending) {
+    pending = fetchAndShrink(url);
+    imageCache.set(url, pending);
+    if (imageCache.size > IMAGE_CACHE_MAX) {
+      const oldest = imageCache.keys().next().value;
+      if (oldest !== undefined) imageCache.delete(oldest);
+    }
+  }
+  const img = await pending;
+  // 실패는 캐시하지 않는다 — 일시적인 네트워크 문제였다면 다음 그리기에서 다시 시도
+  if (img === null) imageCache.delete(url);
+  return img;
+}
+
+async function fetchAndShrink(url: string): Promise<Drawable | null> {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
@@ -443,7 +486,7 @@ export function paintRegionHashtags(p: Painter, names: string[], color: string) 
   // 워터마크(우하단)와 겹치지 않게 폭 제한
   const lines = wrapText(ctx, text, p.x(1080 - 360), 2);
   for (const [i, line] of lines.entries()) {
-    drawText(p, line, p.x(64), p.y(1350 - 66 - (lines.length - 1 - i) * 42), p.x(1080 - 360));
+    drawText(p, line, p.x(64), p.y(p.LH - 66 - (lines.length - 1 - i) * 42), p.x(1080 - 360));
   }
 }
 
@@ -453,7 +496,7 @@ export function paintWatermark(p: Painter, alpha = 0.5) {
   ctx.fillStyle = p.skin.ink;
   ctx.globalAlpha = alpha;
   ctx.textAlign = 'right';
-  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(1350 - 64), p.x(320));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(p.LH - 64), p.x(320));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
@@ -477,8 +520,12 @@ export function paintPhotoGrid(
   const { ctx, skin } = p;
   // 조정값은 사진 순서에 붙어 있다 — 못 불러온 사진을 걸러내기 전에 짝지어 둬야 어긋나지 않는다
   const paired = images
-    .map((img, i) => ({ img, adj: adjustAt(opts.adjusts, i, DEFAULT_TILTS[i % DEFAULT_TILTS.length]) }))
-    .filter((x): x is { img: Drawable; adj: ReturnType<typeof adjustAt> } => x.img !== null)
+    .map((img, i) => ({
+      img,
+      i,
+      adj: adjustAt(opts.adjusts, i, DEFAULT_TILTS[i % DEFAULT_TILTS.length]),
+    }))
+    .filter((x): x is { img: Drawable; i: number; adj: ReturnType<typeof adjustAt> } => x.img !== null)
     .slice(0, 4);
   const shots = paired.map((x) => x.img);
   if (shots.length === 0) return top;
@@ -512,10 +559,19 @@ export function paintPhotoGrid(
       let ph = innerH;
       if (innerW / innerH > ars[i]) pw = innerH * ars[i];
       else ph = innerW / ars[i];
-      // 사진마다 크기가 다르다 — 칸을 크게 넘어서면 서로 겹치므로 위쪽만 살짝 묶어 둔다
-      const k = Math.min(1.12, paired[i].adj.scale);
+      // 사진마다 크기가 다르다 — 핀치로 키우는 만큼 따라가되, 줄 폭을 넘치면 아래에서 줄 전체를 줄인다
+      const k = Math.min(1.3, paired[i].adj.scale);
       return { w: (pw + pad * 2) * k, h: (ph + pad * 2) * k };
     });
+    // 한 줄이 카드 폭을 넘으면 그 줄만 통째로 눌러 담는다 — 서로 겹치는 것보다 낫다
+    const rowW = sizes.reduce((a, b) => a + b.w, 0) + gap * (row.length - 1);
+    if (rowW > areaW) {
+      const shrink = (areaW - gap * (row.length - 1)) / (rowW - gap * (row.length - 1));
+      for (const s2 of sizes) {
+        s2.w *= shrink;
+        s2.h *= shrink;
+      }
+    }
     return { row, sizes, h: Math.max(...sizes.map((s2) => s2.h)) };
   });
   const usedH = laid.reduce((a, b) => a + b.h, 0) + gap * (laid.length - 1);
@@ -531,7 +587,7 @@ export function paintPhotoGrid(
       const { w, h } = sizes[k];
       const cx = x + w / 2;
       const cy = bandY + bandH / 2;
-      drawFramedPhoto(p, shots[i], cx, cy, w, h, paired[i].adj.tilt, paired[i].adj.focus);
+      drawFramedPhoto(p, shots[i], cx, cy, w, h, paired[i].adj.tilt, paired[i].adj.focus, paired[i].i);
       lastCell = { cx, cy, w, h };
       x += w + gap;
     }

@@ -278,9 +278,10 @@ export default function RecapCardSheet({ open, onClose, coupleId }: Props) {
           <p className="py-10 text-center text-sm opacity-50">카드를 그리는 중…</p>
         ) : (
           <CardPreview
-            key={cardKey}
+            paintKey={cardKey}
             fileName={`dohwaji-recap-${scope === 'month' ? monthKey : 'all'}.png`}
             note={SHARE_SIZES[ratio].note}
+            aspect={SHARE_SIZES[ratio].w / SHARE_SIZES[ratio].h}
             paint={(canvas) =>
               styleKey === 'map'
                 ? paintMapCard(canvas, {

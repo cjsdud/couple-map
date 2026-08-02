@@ -77,7 +77,7 @@ export async function paintMapCard(canvas: HTMLCanvasElement, data: MapCardData)
   );
   const badge = badges.length > 0;
   // 아래에서부터 자리를 빼 지도 높이를 정한다 — 아래 요소가 늘어도 겹치지 않게
-  const bottom = 1350 - 96 - (data.regionNames.length ? 44 : 0) - (caption ? 74 : 0) - (badge ? 92 : 0);
+  const bottom = p.LH - 96 - (data.regionNames.length ? 44 : 0) - (caption ? 74 : 0) - (badge ? 92 : 0);
   const box = { x: 60, y: mapTop, w: 960, h: Math.max(360, bottom - mapTop) };
 
   const drawn = await paintMap(p, box, {

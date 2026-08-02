@@ -51,9 +51,11 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
   const p = createPainter(canvas, data.theme, data.ratio);
   const { ctx, skin } = p;
   await loadShareFonts();
-  const images = (await Promise.all(data.photoUrls.slice(0, 4).map(loadImage))).filter(
-    (i): i is Drawable => i !== null,
-  );
+  // 조정값·제스처는 사진 순서에 붙는다 — 못 불러온 사진을 걸러내도 원래 순번을 들고 간다
+  const loaded = await Promise.all(data.photoUrls.slice(0, 4).map(loadImage));
+  const images = loaded
+    .map((img, i) => ({ img, i }))
+    .filter((x): x is { img: Drawable; i: number } => x.img !== null);
 
   // 필름은 언제나 어둡다 — 테마가 밝아도 스트립 자체는 검은 띠여야 필름으로 보인다
   ctx.fillStyle = skin.dark ? '#100e0c' : '#1b1815';
@@ -69,24 +71,24 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
   const holeW = p.x(30);
   const holeH = p.vh(22);
   ctx.fillStyle = '#efe7d8';
-  for (let y = 34; y < 1330; y += 52) {
+  for (let y = 34; y < p.LH - 20; y += 52) {
     for (const cx of [stripX + band / 2, stripX + stripW - band / 2]) {
       roundRect(ctx, p.x(cx) - holeW / 2, p.y(y) - holeH / 2, holeW, holeH, 5 * p.s);
       ctx.fill();
     }
   }
 
-  // 프레임 — 사진 수에 맞춰 높이를 나눈다
+  // 프레임 — 사진 수에 맞춰 높이를 나눈다. 비율마다 남는 세로는 프레임이 흡수한다
   const innerX = stripX + band + 16;
   const innerW = stripW - (band + 16) * 2;
   const count = Math.max(1, images.length);
   const top = 46;
   const bottomText = 168; // 아래 한 칸은 날짜·문구 자리
   const gap = 14;
-  const frameH = (1350 - top - bottomText - gap * count) / count;
-  for (const [i, img] of images.entries()) {
+  const frameH = (p.LH - top - bottomText - gap * count) / count;
+  for (const [slot, { img, i }] of images.entries()) {
     const adj = adjustAt(data.adjusts, i);
-    const fy = top + i * (frameH + gap);
+    const fy = top + slot * (frameH + gap);
     const x = p.x(innerX);
     const y = p.y(fy);
     const w = p.x(innerW);
@@ -98,12 +100,13 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
     drawCover(ctx, tuned(p, img), x, y, w, h, adj.focus);
     tintOver(p, x, y, w, h);
     ctx.restore();
+    p.hits.push({ index: i, cx: x + w / 2, cy: y + h / 2, w, h, deg: 0, crop: true });
   }
 
   paintGrain(p, Math.max(skin.grain, 0.35));
 
   // 아래 칸 — 필름 각인 톤으로 날짜·한마디
-  const baseY = 1350 - bottomText + 62;
+  const baseY = p.LH - bottomText + 62;
   ctx.textAlign = 'center';
   ctx.font = p.font(skin.title, 40, 700);
   ctx.fillStyle = '#ffb648';
@@ -126,7 +129,7 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
   ctx.fillStyle = '#efe7d8';
   ctx.globalAlpha = 0.45;
   ctx.textAlign = 'right';
-  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 96), p.y(1350 - 24), p.x(300));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 96), p.y(p.LH - 24), p.x(300));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
@@ -142,11 +145,12 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
 
   skin.paintBg(p);
 
-  // 사진이 없으면 티켓을 짧게 잡고 가운데로 — 빈 칸이 크게 뜨지 않게
+  // 사진이 없으면 티켓을 짧게 잡고 가운데로 — 빈 칸이 크게 뜨지 않게.
+  // 티켓 길이는 비율을 따라간다 (정사각은 짧게, 스토리는 길게)
   const tx = 90;
   const tw = 900;
-  const th = img ? 1070 : 820;
-  const ty = img ? 140 : 265;
+  const th = img ? p.LH - 280 : Math.min(820, p.LH - 460);
+  const ty = img ? 140 : Math.max(140, (p.LH - th) / 2 - 40);
 
   ctx.save();
   ctx.shadowColor = 'rgba(20,16,12,0.24)';
@@ -162,7 +166,8 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
   // 위쪽: 사진 띠 (있으면) + 제목
   let cursor = ty + 96;
   if (img) {
-    const ph = Math.round(300 * adj.scale);
+    // 스토리처럼 길면 사진 띠도 길어진다
+    const ph = Math.round((300 + Math.max(0, p.LH - 1350) * 0.45) * adj.scale);
     ctx.save();
     // 티켓 모서리를 따라 자른다 — 사각으로 자르면 위 모서리가 각져 카드 밖으로 튀어 보인다
     roundRect(ctx, p.x(tx), p.y(ty), p.x(tw), p.vh(th), 22 * p.s);
@@ -173,6 +178,15 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
     drawCover(ctx, tuned(p, img), p.x(tx), p.y(ty), p.x(tw), p.vh(ph), adj.focus);
     tintOver(p, p.x(tx), p.y(ty), p.x(tw), p.vh(ph));
     ctx.restore();
+    p.hits.push({
+      index: 0,
+      cx: p.x(tx + tw / 2),
+      cy: p.y(ty) + p.vh(ph) / 2,
+      w: p.x(tw),
+      h: p.vh(ph),
+      deg: 0,
+      crop: true,
+    });
     cursor = ty + ph + 92;
   }
 
@@ -182,12 +196,19 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
   drawText(p, dotted(data.date), p.W / 2, p.y(cursor), p.x(tw - 80));
   cursor += 26;
 
-  // 가운데: 코스 표 — 번호 + 이름, 한마디가 있으면 그 아래 한 줄 더
-  const spots = (data.spotNames ?? []).slice(0, 5).map((name, i) => ({
+  // 가운데: 코스 표 — 번호 + 이름, 한마디가 있으면 그 아래 한 줄 더.
+  // 정사각처럼 짧은 비율에서 표가 절취선을 넘으면 한마디 줄부터 접고, 그래도 넘치면 줄을 줄인다
+  let spots = (data.spotNames ?? []).slice(0, 5).map((name, i) => ({
     name,
     note: data.spotNotes?.[i]?.trim() || null,
   }));
+  const availH = ty + th - 300 - (cursor + 62);
   const rowH = (note: string | null) => (note ? 98 : 62);
+  if (spots.reduce((sum, sp) => sum + rowH(sp.note), 0) > availH) {
+    spots = spots.map((sp) => ({ ...sp, note: null }));
+    const fit = Math.max(1, Math.floor(availH / 62));
+    spots = spots.slice(0, fit);
+  }
   const tableH = spots.reduce((sum, sp) => sum + rowH(sp.note), 0);
   // 절취선은 코스가 끝나는 자리 바로 아래 — 코스가 짧을 때 빈 칸이 뜨지 않게
   const tearY = Math.min(ty + th - 300, cursor + 62 + tableH - 62 + 34);
@@ -297,7 +318,7 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
   ctx.fillStyle = skin.ink;
   ctx.globalAlpha = 0.5;
   ctx.textAlign = 'right';
-  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(1286), p.x(320));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - 64), p.y(p.LH - 64), p.x(320));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }
@@ -346,9 +367,11 @@ export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCa
   }
   let y = 268 + title.lines.length * (title.size + 14) + 30;
 
-  // 사진 — 넓은 가로 컷
+  // 사진 — 넓은 가로 컷. 본문·스티커 자리(아래 320)는 남기고, 남는 세로는 사진이 흡수한다
   if (img) {
-    const ph = Math.round(560 * adj.scale);
+    const maxPh = p.LH - y - 320;
+    const base = 560 + Math.max(0, p.LH - 1350) * 0.6;
+    const ph = Math.max(240, Math.min(Math.round(base * adj.scale), maxPh));
     const x = p.x(m);
     const w = p.x(1080 - m * 2);
     ctx.save();
@@ -358,6 +381,7 @@ export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCa
     drawCover(ctx, tuned(p, img), x, p.y(y), w, p.vh(ph), adj.focus);
     tintOver(p, x, p.y(y), w, p.vh(ph));
     ctx.restore();
+    p.hits.push({ index: 0, cx: x + w / 2, cy: p.y(y) + p.vh(ph) / 2, w, h: p.vh(ph), deg: 0, crop: true });
     y += ph + 56;
   }
 
@@ -381,14 +405,14 @@ export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCa
     ctx.globalAlpha = 1;
   }
 
-  stickerRow(p, stickerTexts(data.stickers, 2), 1200);
+  stickerRow(p, stickerTexts(data.stickers, 2), p.LH - 150);
   paintGrain(p);
 
   ctx.font = p.font(skin.body, 28, 600);
   ctx.fillStyle = skin.ink;
   ctx.globalAlpha = 0.5;
   ctx.textAlign = 'right';
-  drawText(p, '우리의 도화지 🖍️', p.x(1080 - m), p.y(1290), p.x(320));
+  drawText(p, '우리의 도화지 🖍️', p.x(1080 - m), p.y(p.LH - 60), p.x(320));
   ctx.globalAlpha = 1;
   ctx.textAlign = 'left';
 }

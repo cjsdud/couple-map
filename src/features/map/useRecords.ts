@@ -745,11 +745,55 @@ export interface RecordPhoto {
   signedUrl?: string;
 }
 
-/** 기록 상세 사진 조회 — record_photos → storage signed URL. 목/미연결이면 빈 배열 (섹션 생략) */
+/**
+ * ?mock=1 데모 사진 — 그라데이션+원으로 만든 가짜 사진 (외부 요청 없음).
+ * 스팟 태그를 섞어 둬서 '사진 가득' 카드가 고른 사진의 장소를 따라가는지 눈으로 확인할 수 있다.
+ */
+const MOCK_PHOTO_SPECS: Record<string, { spot: string | null; a: string; b: string }[]> = {
+  'mock-1': [
+    { spot: 'm1s1', a: '#f7b267', b: '#e8637c' }, // 한강 노을
+    { spot: 'm1s1', a: '#9ec3d8', b: '#54748c' },
+    { spot: 'm1s2', a: '#e8d9b8', b: '#a3743d' }, // 델리
+    { spot: null, a: '#c9a6e0', b: '#f4a6c0' },
+  ],
+  'mock-4': [
+    { spot: 'm4s1', a: '#d9c7b3', b: '#6b4f3a' },
+    { spot: 'm4s2', a: '#8cab68', b: '#3c5c33' },
+  ],
+};
+
+function mockRecordPhotos(recordId: string): RecordPhoto[] {
+  const specs = MOCK_PHOTO_SPECS[recordId] ?? [];
+  return specs.map((sp, i) => {
+    const c = document.createElement('canvas');
+    c.width = 900;
+    c.height = 1200;
+    const x = c.getContext('2d');
+    if (x) {
+      const g = x.createLinearGradient(0, 0, 900, 1200);
+      g.addColorStop(0, sp.a);
+      g.addColorStop(1, sp.b);
+      x.fillStyle = g;
+      x.fillRect(0, 0, 900, 1200);
+      x.globalAlpha = 0.3;
+      for (let k = 0; k < 8; k++) {
+        x.beginPath();
+        x.arc((k * 173 + i * 97) % 900, (k * 251 + i * 131) % 1200, 70 + ((k * 53 + i * 29) % 130), 0, Math.PI * 2);
+        x.fillStyle = k % 2 ? '#ffffff' : '#00000033';
+        x.fill();
+      }
+    }
+    const url = c.toDataURL('image/jpeg', 0.8);
+    return { id: `${recordId}-p${i}`, storage_path: '', seq: i + 1, spot_id: sp.spot, signedUrl: url };
+  });
+}
+
+/** 기록 상세 사진 조회 — record_photos → storage signed URL. 목이면 데모 사진, 미연결이면 빈 배열 */
 export function useRecordPhotos(recordId: string | undefined) {
   return useQuery({
     queryKey: ['record-photos', recordId],
     queryFn: async (): Promise<RecordPhoto[]> => {
+      if (isMock()) return recordId ? mockRecordPhotos(recordId) : [];
       if (!supabase || !recordId) return [];
       const { data, error } = await supabase
         .from('record_photos')
@@ -765,7 +809,7 @@ export function useRecordPhotos(recordId: string | undefined) {
       if (signError) throw signError;
       return rows.map((r, i) => ({ ...r, signedUrl: signed[i]?.signedUrl ?? undefined }));
     },
-    enabled: Boolean(supabase && recordId) && !isMock(),
+    enabled: Boolean(recordId) && (isMock() || Boolean(supabase)),
   });
 }
 

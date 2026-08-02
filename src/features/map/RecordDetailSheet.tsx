@@ -135,6 +135,15 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
   const total = record ? record.expenses.reduce((sum, e) => sum + e.amount, 0) : 0;
   // 공유 카드 데이터 — 사진·지역명이 늦게 로드돼도 contentKey로 다시 그린다
   const sharePhotoUrls = photos.map((p) => p.signedUrl).filter((u): u is string => Boolean(u));
+  // 사진 → 태그된 스팟. 한 장짜리 카드(사진 가득 등)는 고른 사진의 장소를 제목·지역으로 쓴다 —
+  // 카페 사진을 골랐는데 제목이 1번 스팟(해변)이던 어긋남을 없앤다
+  const spotById = new Map(spots.map((s) => [s.id, s]));
+  const spotByUrl = new Map(
+    photos
+      .filter((p): p is RecordPhoto & { signedUrl: string } => Boolean(p.signedUrl))
+      .map((p) => [p.signedUrl, p.spot_id !== null ? spotById.get(p.spot_id) : undefined]),
+  );
+  const spotOf = (url: string | undefined) => (url ? spotByUrl.get(url) : undefined);
   // 지도 카드용 핀 — 좌표가 있는 스팟만 (검색 없이 이름만 적은 스팟은 지도에 못 찍는다)
   const mapPins = spots
     .filter((s) => s.lat !== null && s.lng !== null)
@@ -280,6 +289,7 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                     photoAlign,
                     date: record.date,
                     spotNames: spots.map((s) => s.name),
+                    spotNotes: spots.map((s) => s.note),
                     memo: caption,
                     regionNames: shareRegionNames,
                     photoUrls,
@@ -293,38 +303,48 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                       key: 'fullbleed',
                       label: '사진 가득',
                       maxPhotos: 1,
-                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
-                        paintFullBleedCard(canvas, {
+                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) => {
+                        // 고른 사진이 태그된 장소를 따라간다 — 제목·지역·한마디가 사진과 어긋나지 않게
+                        const sp = spotOf(o.photoUrls[0]);
+                        const region =
+                          sp?.sigungu_code && sigunguNames[sp.sigungu_code]
+                            ? [sigunguNames[sp.sigungu_code]]
+                            : shareRegionNames;
+                        return paintFullBleedCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
                           adjusts: o.adjusts,
                           photoAlign: o.photoAlign,
                           date: record.date,
-                          title: spots[0]?.name ?? null,
+                          title: sp?.name ?? spots[0]?.name ?? null,
                           subtitle: spots.map((s) => s.name).join('  →  '),
-                          caption: o.caption,
-                          regionNames: shareRegionNames,
+                          caption: o.caption || sp?.note || null,
+                          regionNames: region,
                           photoUrls: o.photoUrls,
                           stickers: shareStickers,
-                        }),
+                        });
+                      },
                     },
                     {
                       key: 'polaroid',
                       label: '폴라로이드',
                       maxPhotos: 1,
-                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) =>
-                        paintPolaroidCard(canvas, {
+                      paint: (canvas: HTMLCanvasElement, o: ShareOptions) => {
+                        const sp = spotOf(o.photoUrls[0]);
+                        return paintPolaroidCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
                           adjusts: o.adjusts,
                           photoAlign: o.photoAlign,
                           date: record.date,
                           subtitle: spots.map((s) => s.name).join('  →  '),
-                          caption: o.caption,
+                          // 문구가 비면 그 사진 장소의 한마디가 폴라로이드 손글씨가 된다
+                          caption: o.caption || sp?.note || null,
                           regionNames: shareRegionNames,
                           photoUrls: o.photoUrls,
                           stickers: shareStickers,
-                        }),
+                        });
+                      },
                     },
                   ]
                 : []),
@@ -372,21 +392,24 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                 key: 'magazine',
                 label: '매거진',
                 maxPhotos: 1,
-                paint: (canvas, { theme, ratio, caption, photoUrls, adjusts, photoAlign }) =>
-                  paintMagazineCard(canvas, {
-                    theme,
-                    ratio,
-                    adjusts,
-                    photoAlign,
+                paint: (canvas, o) => {
+                  const sp = spotOf(o.photoUrls[0]);
+                  return paintMagazineCard(canvas, {
+                    theme: o.theme,
+                    ratio: o.ratio,
+                    adjusts: o.adjusts,
+                    photoAlign: o.photoAlign,
                     date: record.date,
-                    title: spots[0]?.name ?? null,
+                    // 표지 제목도 고른 사진의 장소를 따라간다
+                    title: sp?.name ?? spots[0]?.name ?? null,
                     subtitle: spots.map((s) => s.name).join('  →  '),
                     spotNotes: spots.map((s) => s.note),
-                    caption,
+                    caption: o.caption,
                     regionNames: shareRegionNames,
-                    photoUrls,
+                    photoUrls: o.photoUrls,
                     stickers: shareStickers,
-                  }),
+                  });
+                },
               },
               {
                 key: 'map',

@@ -31,6 +31,26 @@ export interface PhotoAdjust {
 /** 사진 묶음이 카드 안에서 놓이는 자리 */
 export type PhotoAlign = 'top' | 'center' | 'bottom';
 
+/**
+ * 그려진 사진 한 장의 실제 위치 (실제 픽셀, 회전 포함).
+ * 미리보기가 이 사각형으로 손가락 제스처(끌기·핀치)를 어느 사진에 보낼지 판정한다.
+ */
+export interface PhotoHit {
+  /** photoUrls에서의 순서 — 시트가 이 순서로 조정값을 찾는다 */
+  index: number;
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+  /** 기울기(도) */
+  deg: number;
+  /**
+   * 프레임이 사진을 잘라내는가 — 잘라내면 끌기가 '보일 부분'(focus)을 움직이고,
+   * 사진 비율 그대로인 액자(그리드)는 focus가 보이지 않으므로 끌기를 크기로 보낸다.
+   */
+  crop: boolean;
+}
+
 export interface CardSize {
   key: ShareRatio;
   label: string;
@@ -92,8 +112,11 @@ export interface Skin {
 /**
  * 페인터 — 캔버스 + 좌표 변환.
  *
- * 레이아웃은 **1080×1350 기준 좌표**로만 쓰고, 실제 비율 변환은 여기서 흡수한다.
- * 그래서 레이아웃 코드 하나가 피드·정사각·스토리 3종을 모두 그린다.
+ * 레이아웃은 **가로 1080 기준 좌표**로 쓰고, 실제 비율 변환은 여기서 흡수한다.
+ * 세로는 찌그러뜨리지 않는다 — 예전엔 1350 기준 세로를 비율마다 눌러 담아서
+ * 정사각·스토리에서 사진이 납작해지거나 늘어났다. 지금은 가로·세로 같은 배율이고,
+ * 대신 내용 높이(`LH`)가 비율마다 달라진다. 레이아웃은 위는 고정 좌표로,
+ * 아래는 `LH` 기준으로 앉히고, 사진처럼 유연한 영역이 남는 높이를 흡수한다.
  */
 export interface Painter {
   ctx: CanvasRenderingContext2D;
@@ -102,13 +125,18 @@ export interface Painter {
   H: number;
   size: CardSize;
   skin: Skin;
-  /** 가로 배율 (1080 기준) — 글자·선 굵기에 곱한다 */
+  /** 배율 (1080 기준) — 가로·세로 공통. 글자·선 굵기에 곱한다 */
   s: number;
+  /**
+   * 내용 영역의 세로 길이 (1080 기준 좌표계).
+   * 세로(4:5) 1350 · 정사각 1080 · 스토리 ~1480 — 아래 요소는 여기서부터 뺀 자리에 앉힌다.
+   */
+  LH: number;
   /** 1080 기준 x → 실제 x */
   x: (v: number) => number;
-  /** 1350 기준 y → 실제 y (안전 영역 반영) */
+  /** 기준 y → 실제 y (안전 영역 반영, 세로 배율은 가로와 같다) */
   y: (v: number) => number;
-  /** 1350 기준 세로 길이 → 실제 길이 */
+  /** 기준 세로 길이 → 실제 길이 */
   vh: (v: number) => number;
   /** 내용 영역 위·아래 경계 (실제 픽셀) */
   top: number;
@@ -117,4 +145,6 @@ export interface Painter {
   font: (family: string, size: number, weight?: number) => string;
   /** 이모지(기분)는 시스템 이모지 폰트로 */
   emoji: (size: number) => string;
+  /** 이번 그리기에서 사진이 앉은 자리들 — 미리보기 제스처 판정용 */
+  hits: PhotoHit[];
 }

@@ -36,6 +36,8 @@ interface Common {
 export interface RecordCardData extends Common {
   date: string;
   spotNames: string[];
+  /** 스팟별 한마디 (0016) — spotNames와 같은 순서. 있는 줄만 코스 아래에 붙는다 */
+  spotNotes?: (string | null)[];
   memo: string | null;
   regionNames: string[];
   photoUrls: string[];
@@ -68,6 +70,25 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
 
   // 코스가 두 줄이 될 수 있으니 아래 요소는 흘려 내린다 — 고정 y로 두면 스티커가 글자를 덮는다
   let flow = 300 + courseLines.length * 54;
+
+  // 스팟별 한마디 — 이름과 붙여 작게, 많으면 두 줄까지만 (카드의 주인공은 사진이다)
+  const notes = (data.spotNames ?? [])
+    .map((name, i) => ({ name, note: data.spotNotes?.[i]?.trim() }))
+    .filter((x): x is { name: string; note: string } => Boolean(x.note))
+    .slice(0, 2);
+  if (notes.length > 0) {
+    ctx.font = p.font(skin.body, 30, 500);
+    ctx.globalAlpha = 0.65;
+    for (const n of notes) {
+      const text = notes.length > 1 || data.spotNames.length > 1 ? `${n.name} — ${n.note}` : n.note;
+      const line = wrapText(ctx, text, p.x(1080 - 240), 1)[0] ?? '';
+      drawText(p, line, p.W / 2, p.y(flow + 8), p.x(1080 - 200));
+      flow += 44;
+    }
+    ctx.globalAlpha = 1;
+    flow += 6;
+  }
+
   const chips = stickerTexts(data.stickers, 2);
   if (chips.length > 0) {
     stickerRow(p, chips, flow + 20);
@@ -75,8 +96,8 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
   }
 
   const hasPhotos = images.some((i) => i !== null);
-  // 메모가 있으면 아래 두 줄을 비워 둔다
-  const photoBottom = data.memo ? 1130 : 1250;
+  // 메모가 있으면 아래 두 줄을 비워 둔다 — 아래 경계는 비율마다 다르니 LH에서 뺀다
+  const photoBottom = data.memo ? p.LH - 220 : p.LH - 100;
   const photoTop = flow + 14;
   let photoEnd = photoTop;
   if (hasPhotos && photoBottom - photoTop > 240) {
@@ -94,14 +115,14 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
       ctx.font = p.font(skin.body, 40, 500);
       // 사진이 끝나는 자리 바로 아래 — 사진이 작게 들어간 날에도 글이 멀리 떨어지지 않게
       const memoLines = wrapText(ctx, `“${data.memo}”`, p.x(1080 - 150), 2);
-      const memoY = Math.min(1220 - (memoLines.length - 1) * 52, photoEnd + 74);
+      const memoY = Math.min(p.LH - 130 - (memoLines.length - 1) * 52, photoEnd + 74);
       for (const [i, line] of memoLines.entries()) {
         drawText(p, line, p.W / 2, p.y(memoY + i * 52), p.x(1080 - 120));
       }
     } else {
       ctx.font = p.font(skin.body, 56, 500);
       const lines = wrapText(ctx, `“${data.memo}”`, p.x(1080 - 260), 4);
-      const startY = 760 - ((lines.length - 1) * 72) / 2;
+      const startY = p.LH * 0.56 - ((lines.length - 1) * 72) / 2;
       for (const [i, line] of lines.entries()) {
         drawText(p, line, p.W / 2, p.y(startY + i * 72), p.x(1080 - 200));
       }
@@ -142,18 +163,26 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
   skin.paintBg(p);
   paintHeaderDeco(p, accent, 3);
 
+  // 정사각처럼 세로가 짧으면 글 블록 사이 간격을 줄여 눌러 담는다 (글자 크기는 그대로)
+  const squeeze = Math.max(0, 1350 - p.LH);
+
   ctx.fillStyle = skin.ink;
   ctx.textAlign = 'center';
   ctx.font = p.font(skin.title, 58, 700);
   const [y, m, d] = data.date.split('-');
-  drawText(p, `${y}년 ${Number(m)}월 ${Number(d)}일의 우리`, p.W / 2, p.y(216), p.x(940));
+  drawText(p, `${y}년 ${Number(m)}월 ${Number(d)}일의 우리`, p.W / 2, p.y(216 - squeeze * 0.1), p.x(940));
 
   if (data.myMood || data.partnerMood) {
     ctx.font = p.emoji(110);
-    ctx.fillText(`${data.myMood ?? ''}  ${data.partnerMood ?? ''}`.trim(), p.W / 2, p.y(380));
+    ctx.fillText(
+      `${data.myMood ?? ''}  ${data.partnerMood ?? ''}`.trim(),
+      p.W / 2,
+      p.y(380 - squeeze * 0.2),
+    );
   }
 
-  let bubbleY = 460;
+  let bubbleY = 460 - squeeze * 0.24;
+  const bubbleGap = 56 - squeeze * 0.08;
   const bubble = (label: string, text: string, align: 'left' | 'right', color: string) => {
     ctx.font = p.font(skin.body, 38, 500);
     const lines = wrapText(ctx, text, p.x(640), 2);
@@ -175,7 +204,7 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     for (const [i, line] of lines.entries()) {
       drawText(p, line, x + p.x(30), p.y(bubbleY + 56 + i * 50), w - p.x(50));
     }
-    bubbleY += h + 56;
+    bubbleY += h + bubbleGap;
   };
   const myName = data.myName?.trim() || '나';
   const partnerName = data.partnerName?.trim() || '짝꿍';
@@ -214,9 +243,10 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
   // 문구가 있으면 하단에 인용구 자리를 비워둔다
   const caption = data.caption?.trim();
   const bottomReserve = caption ? 200 : 110;
-  const photoTop = Math.max(bubbleY + 20, 780);
-  const photoH = Math.min(430, 1350 - bottomReserve - photoTop);
-  if (photoH >= 200) {
+  const photoTop = Math.max(bubbleY + 20, 780 - squeeze * 0.24);
+  // 스토리처럼 세로가 길면 사진이 그만큼 자란다 — 남는 높이를 사진이 흡수한다
+  const photoH = Math.min(430 + Math.max(0, p.LH - 1350), p.LH - bottomReserve - photoTop);
+  if (photoH >= 170) {
     paintPhotoGrid(p, images, photoTop, photoH, data.photoUrls.length, {
       adjusts: data.adjusts,
       align: data.photoAlign,
@@ -231,7 +261,7 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
     ctx.globalAlpha = 0.85;
     ctx.font = p.font(skin.body, 42, 500);
     const lines = wrapText(ctx, `“${caption}”`, p.x(1080 - 240), 2);
-    const capY = 1350 - 150 - (lines.length - 1) * 48;
+    const capY = p.LH - 150 - (lines.length - 1) * 48;
     for (const [i, line] of lines.entries()) drawText(p, line, p.W / 2, p.y(capY + i * 48), p.x(1080 - 180));
     ctx.globalAlpha = 1;
   }
@@ -281,13 +311,16 @@ export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardD
     ctx.globalAlpha = 1;
   }
 
+  // 사진 영역이 비율마다 남는 높이를 흡수한다 — 정사각은 짧게, 스토리는 길게
+  const gridTop = 480;
+  const gridH = p.LH - 270 - gridTop;
   if (hasPhotos) {
-    paintPhotoGrid(p, images, 480, 600, data.photoTotal ?? data.photoUrls.length, {
+    paintPhotoGrid(p, images, gridTop, gridH, data.photoTotal ?? data.photoUrls.length, {
       adjusts: data.adjusts,
       align: data.photoAlign,
     });
   } else {
-    heartDoodle(p, 540, 830, 300, accent);
+    heartDoodle(p, 540, gridTop + gridH / 2, Math.min(300, gridH * 0.6), accent);
   }
 
   paintGrain(p);
@@ -297,7 +330,7 @@ export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardD
     ctx.fillStyle = skin.ink;
     ctx.globalAlpha = 0.8;
     ctx.textAlign = 'center';
-    drawText(p, data.footer, p.W / 2, p.y(1128), p.x(1080 - 140));
+    drawText(p, data.footer, p.W / 2, p.y(p.LH - 222), p.x(1080 - 140));
     ctx.globalAlpha = 1;
   }
 

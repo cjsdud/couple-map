@@ -34,7 +34,7 @@ export const PALETTES: Record<ShareTheme, Skin> = {
       ctx.translate(p.W / 2, (p.top + p.bottom) / 2);
       ctx.rotate(-0.004);
       const w = p.x(1080 - 72);
-      const h = p.vh(1350 - 72);
+      const h = p.vh(p.LH - 72);
       ctx.strokeRect(-w / 2, -h / 2, w, h);
       ctx.restore();
       ctx.globalAlpha = 1;

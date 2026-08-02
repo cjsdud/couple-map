@@ -2,8 +2,9 @@ import type { CardSize, ShareRatio } from './types';
 
 /**
  * 비율 3종 (계획 §6).
- * 스토리는 상단 250·하단 340px에 인스타 UI가 겹치므로 그 안쪽에만 내용을 둔다.
- * 남는 내용 영역(1080×1330)이 피드(1080×1350)와 거의 같아 레이아웃을 그대로 쓸 수 있다.
+ * 스토리는 위·아래에 인스타 UI(프로필·답장창)가 겹치므로 그 안쪽에만 내용을 둔다.
+ * 세로를 눌러 담지 않으므로 내용 높이가 비율마다 다르다 —
+ * 세로 1350 · 정사각 1080 · 스토리 1480. 레이아웃이 Painter.LH로 이 차이를 흡수한다.
  */
 export const SHARE_SIZES: Record<ShareRatio, CardSize> = {
   feed: {
@@ -33,8 +34,8 @@ export const SHARE_SIZES: Record<ShareRatio, CardSize> = {
     note: '스토리 규격(9:16)이에요 · 위아래는 화면에 가려지지 않게 비워 뒀어요',
     w: 1080,
     h: 1920,
-    safeTop: 250,
-    safeBottom: 340,
+    safeTop: 180,
+    safeBottom: 260,
   },
 };
 

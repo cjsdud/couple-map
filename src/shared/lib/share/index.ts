@@ -12,11 +12,13 @@ export type {
   Painter,
   PhotoAdjust,
   PhotoAlign,
+  PhotoHit,
   ShareRatio,
   ShareTheme,
   Skin,
 } from './types';
 export { DEFAULT_TILTS } from './draw';
+export { photoHitsOf } from './painter';
 export {
   paintDayCard,
   paintRecapCard,
