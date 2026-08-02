@@ -26,6 +26,33 @@ export function roundRect(
   ctx.closePath();
 }
 
+/**
+ * 글자를 **자소 단위**로 쪼갠다.
+ * ❤️(U+2764 U+FE0F)나 가족 이모지처럼 여러 코드포인트가 한 글자를 이루는 경우가 있어,
+ * 코드포인트나 코드유닛으로 자르면 줄 끝에서 이모지가 반토막 나 깨져 보인다.
+ */
+function graphemes(text: string): string[] {
+  const Seg = (Intl as unknown as { Segmenter?: new (l?: string, o?: object) => { segment(s: string): Iterable<{ segment: string }> } })
+    .Segmenter;
+  if (Seg) {
+    try {
+      return [...new Seg('ko', { granularity: 'grapheme' }).segment(text)].map((g) => g.segment);
+    } catch {
+      // 폴백으로 내려간다
+    }
+  }
+  // 폴백: 코드포인트로 쪼개되 결합 문자(이모지 변형 선택자·ZWJ·피부색)는 앞 글자에 붙인다
+  const out: string[] = [];
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    const joins =
+      code === 0xfe0f || code === 0x200d || (code >= 0x1f3fb && code <= 0x1f3ff) || (code >= 0x20d0 && code <= 0x20ff);
+    if (out.length > 0 && (joins || out[out.length - 1].endsWith('\u200d'))) out[out.length - 1] += ch;
+    else out.push(ch);
+  }
+  return out;
+}
+
 /** 줄바꿈 — 넘치면 마지막 줄 끝을 말줄임 */
 export function wrapText(
   ctx: CanvasRenderingContext2D,
@@ -34,13 +61,16 @@ export function wrapText(
   maxLines: number,
 ): string[] {
   const lines: string[] = [];
+  const cells = graphemes(text);
   let line = '';
-  for (const ch of text) {
+  for (const ch of cells) {
     if (ctx.measureText(line + ch).width > maxWidth || ch === '\n') {
       lines.push(line);
       line = ch === '\n' ? '' : ch;
       if (lines.length === maxLines) {
-        lines[maxLines - 1] = lines[maxLines - 1].slice(0, -1) + '…';
+        const cut = graphemes(lines[maxLines - 1]);
+        cut.pop();
+        lines[maxLines - 1] = cut.join('') + '…';
         return lines;
       }
     } else {
@@ -122,10 +152,7 @@ export function paintHeaderDeco(p: Painter, color: string, deg: number, cy = 96)
  * 사진 채도 낮추기 — 픽셀 루프(휘도 혼합)라 어느 브라우저에서든 결과가 같다.
  * 실패(컨텍스트 미지원 등) 시 null — 호출부가 원본으로 폴백해 사진이 빠지는 일은 없다.
  */
-export function desaturated(
-  img: ImageBitmap | HTMLImageElement,
-  amount: number,
-): HTMLCanvasElement | null {
+export function desaturated(img: Drawable, amount: number): HTMLCanvasElement | null {
   const iw = img.width;
   const ih = img.height;
   if (!iw || !ih) return null;
@@ -156,7 +183,7 @@ export function desaturated(
 export type Drawable = ImageBitmap | HTMLImageElement | HTMLCanvasElement;
 
 /** 테마 보정을 입힌 사진 원본 — 실패하면 원본 그대로 (사진이 빠지는 것보다 낫다) */
-export function tuned(p: Painter, img: ImageBitmap | HTMLImageElement): Drawable {
+export function tuned(p: Painter, img: Drawable): Drawable {
   return (p.skin.photoDesaturate ? desaturated(img, p.skin.photoDesaturate) : null) ?? img;
 }
 
@@ -214,7 +241,7 @@ export function tintOver(p: Painter, x: number, y: number, w: number, h: number)
  */
 export function drawFramedPhoto(
   p: Painter,
-  img: ImageBitmap | HTMLImageElement,
+  img: Drawable,
   cx: number,
   cy: number,
   w: number,
@@ -280,14 +307,71 @@ export function paintGrain(p: Painter, strength = p.skin.grain) {
   ctx.restore();
 }
 
-export async function loadImage(url: string): Promise<ImageBitmap | null> {
+/** 카드 한 장에 들어가는 사진의 최대 변 — 이보다 크면 줄여서 쓴다 */
+const MAX_PHOTO_EDGE = 1400;
+
+/**
+ * 사진 받아오기 — **항상 적당한 크기로 줄여서** 돌려준다.
+ *
+ * iOS Safari는 캔버스·이미지 메모리 한도가 낮아, 큰 원본을 여러 장 그리면 그중 일부가
+ * 아무 오류 없이 빈 칸으로 나온다. 실제로 채도 보정이 있는 테마(빈티지·미니멀)는 보정
+ * 과정에서 축소본을 만들어 멀쩡했고, 보정이 없는 테마(도화지·필름·파스텔)만 사진이
+ * 빠졌다 — 원본을 그대로 그렸기 때문이다. 여기서 한 번 줄여 두면 테마와 무관하게 안전하다.
+ */
+export async function loadImage(url: string): Promise<Drawable | null> {
+  if (!url) return null;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
-    return await createImageBitmap(await res.blob());
+    const blob = await res.blob();
+    let src: Drawable;
+    try {
+      src = await createImageBitmap(blob);
+    } catch {
+      // createImageBitmap이 못 읽는 포맷 — <img>로 한 번 더 시도한다
+      src = await decodeWithImgTag(blob);
+    }
+    return shrinkToFit(src);
   } catch {
     return null;
   }
+}
+
+function decodeWithImgTag(blob: Blob): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(blob);
+  return new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(im);
+    };
+    im.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('이미지 디코딩 실패'));
+    };
+    im.src = url;
+  });
+}
+
+/** 최대 변을 넘으면 캔버스로 줄인 사본을 만든다 (원본 비트맵은 닫아 메모리를 돌려준다) */
+function shrinkToFit(img: Drawable): Drawable {
+  const iw = img.width;
+  const ih = img.height;
+  const longest = Math.max(iw, ih);
+  if (!longest || longest <= MAX_PHOTO_EDGE) return img;
+  const k = MAX_PHOTO_EDGE / longest;
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(iw * k));
+  c.height = Math.max(1, Math.round(ih * k));
+  const x = c.getContext('2d');
+  if (!x) return img;
+  try {
+    x.drawImage(img, 0, 0, c.width, c.height);
+  } catch {
+    return img;
+  }
+  if (typeof (img as ImageBitmap).close === 'function') (img as ImageBitmap).close();
+  return c;
 }
 
 /** 사진이 없을 때 가운데를 채우는 점선 하트 낙서 — 1080×1350 기준 */
@@ -362,17 +446,18 @@ export function paintWatermark(p: Painter, alpha = 0.5) {
  * 칸을 꽉 채우려고 자르지 않는다. 대신 사진 비율에 맞춰 프레임 크기를 구하고,
  * 그 실제 크기로 줄을 가운데 정렬한다 — 세로 사진만 있어도 좌우가 성겨 보이지 않는다.
  * total: 전체 사진 수 — 그리드에 못 실린 만큼 마지막 프레임에 "+N" 스티커.
+ * 실제로 사진이 끝난 y(1080×1350 기준)를 돌려준다 — 아래 글자를 붙여 놓기 위해.
  */
 export function paintPhotoGrid(
   p: Painter,
-  images: (ImageBitmap | null)[],
+  images: (Drawable | null)[],
   top: number,
   height: number,
   total = 0,
-) {
+): number {
   const { ctx, skin } = p;
-  const shots = images.filter((i): i is ImageBitmap => i !== null).slice(0, 4);
-  if (shots.length === 0) return;
+  const shots = images.filter((i): i is Drawable => i !== null).slice(0, 4);
+  if (shots.length === 0) return top;
 
   const pad = skin.frame.pad * p.s;
   const areaX = p.x(64);
@@ -396,7 +481,8 @@ export function paintPhotoGrid(
   const tilts = [-2, 1.6, 1.4, -1.8];
   let lastCell: { cx: number; cy: number; w: number; h: number } | null = null;
 
-  for (const [r, row] of rows.entries()) {
+  // 줄마다 실제 크기를 먼저 구한다 — 사진이 칸보다 작으면 그만큼 위로 붙여 빈 공간을 없앤다
+  const laid = rows.map((row) => {
     const cellW = (areaW - gap * (row.length - 1)) / row.length;
     const sizes = row.map((i) => {
       const innerW = cellW - pad * 2;
@@ -407,18 +493,26 @@ export function paintPhotoGrid(
       else ph = innerW / ars[i];
       return { w: (pw + pad * 2) * scale, h: (ph + pad * 2) * scale };
     });
+    return { row, sizes, h: Math.max(...sizes.map((s2) => s2.h)) };
+  });
+  const usedH = laid.reduce((a, b) => a + b.h, 0) + gap * (laid.length - 1);
+  // 남는 공간은 위아래로 반반 — 사진이 작게 들어간 날에도 카드가 위로 쏠리지 않게
+  let bandY = areaY + Math.max(0, (areaH - usedH) / 2);
+
+  for (const { row, sizes, h: bandH } of laid) {
     const rowW = sizes.reduce((a, b) => a + b.w, 0) + gap * (row.length - 1);
     let x = areaX + (areaW - rowW) / 2;
-    const bandY = areaY + r * (rowH + gap);
     for (const [k, i] of row.entries()) {
       const { w, h } = sizes[k];
       const cx = x + w / 2;
-      const cy = bandY + rowH / 2;
+      const cy = bandY + bandH / 2;
       drawFramedPhoto(p, shots[i], cx, cy, w, h, tilts[i % tilts.length]);
       lastCell = { cx, cy, w, h };
       x += w + gap;
     }
+    bandY += bandH + gap;
   }
+  const endY = bandY - gap;
 
   const extra = Math.max(0, total - shots.length);
   if (extra > 0 && lastCell) {
@@ -435,4 +529,6 @@ export function paintPhotoGrid(
     ctx.textAlign = 'center';
     drawText(p, `+${extra}`, bx, by + 12 * p.s, 76 * p.s);
   }
+  // 실제로 쓴 아래 끝을 1080×1350 좌표로 되돌려 준다
+  return top + (endY - areaY) / (areaH / height);
 }

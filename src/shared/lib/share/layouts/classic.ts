@@ -58,15 +58,28 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
   ctx.font = p.font(skin.body, 44, 600);
   ctx.globalAlpha = 0.85;
   const course = data.spotNames.join('  →  ');
-  for (const [i, line] of wrapText(ctx, course, p.x(1080 - 200), 2).entries()) {
+  const courseLines = wrapText(ctx, course, p.x(1080 - 200), 2);
+  for (const [i, line] of courseLines.entries()) {
     drawText(p, line, p.W / 2, p.y(300 + i * 54), p.x(1080 - 160));
   }
   ctx.globalAlpha = 1;
 
-  stickerRow(p, stickerTexts(data.stickers, 2), 372);
+  // 코스가 두 줄이 될 수 있으니 아래 요소는 흘려 내린다 — 고정 y로 두면 스티커가 글자를 덮는다
+  let flow = 300 + courseLines.length * 54;
+  const chips = stickerTexts(data.stickers, 2);
+  if (chips.length > 0) {
+    stickerRow(p, chips, flow + 20);
+    flow += 76;
+  }
 
   const hasPhotos = images.some((i) => i !== null);
-  if (hasPhotos) paintPhotoGrid(p, images, 412, 700, data.photoUrls.length);
+  // 메모가 있으면 아래 두 줄을 비워 둔다
+  const photoBottom = data.memo ? 1130 : 1250;
+  const photoTop = flow + 14;
+  let photoEnd = photoTop;
+  if (hasPhotos && photoBottom - photoTop > 240) {
+    photoEnd = paintPhotoGrid(p, images, photoTop, photoBottom - photoTop, data.photoUrls.length);
+  }
 
   if (data.memo) {
     ctx.fillStyle = skin.ink;
@@ -74,8 +87,11 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
     ctx.textAlign = 'center';
     if (hasPhotos) {
       ctx.font = p.font(skin.body, 40, 500);
-      for (const [i, line] of wrapText(ctx, `“${data.memo}”`, p.x(1080 - 150), 2).entries()) {
-        drawText(p, line, p.W / 2, p.y(1168 + i * 52), p.x(1080 - 120));
+      // 사진이 끝나는 자리 바로 아래 — 사진이 작게 들어간 날에도 글이 멀리 떨어지지 않게
+      const memoLines = wrapText(ctx, `“${data.memo}”`, p.x(1080 - 150), 2);
+      const memoY = Math.min(1220 - (memoLines.length - 1) * 52, photoEnd + 74);
+      for (const [i, line] of memoLines.entries()) {
+        drawText(p, line, p.W / 2, p.y(memoY + i * 52), p.x(1080 - 120));
       }
     } else {
       ctx.font = p.font(skin.body, 56, 500);

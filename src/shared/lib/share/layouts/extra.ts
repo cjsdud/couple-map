@@ -9,6 +9,7 @@ import { loadShareFonts } from '../../shareFonts';
 import {
   drawCover,
   drawText,
+  type Drawable,
   fitLines,
   loadImage,
   paintGrain,
@@ -46,7 +47,7 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
   const { ctx, skin } = p;
   await loadShareFonts();
   const images = (await Promise.all(data.photoUrls.slice(0, 4).map(loadImage))).filter(
-    (i): i is ImageBitmap => i !== null,
+    (i): i is Drawable => i !== null,
   );
 
   // 필름은 언제나 어둡다 — 테마가 밝아도 스트립 자체는 검은 띠여야 필름으로 보인다
