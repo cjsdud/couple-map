@@ -14,7 +14,6 @@ export function createPainter(
   canvas: HTMLCanvasElement,
   theme: ShareTheme | undefined,
   ratio: ShareRatio = 'feed',
-  photoScale = 1,
 ): Painter {
   const size: CardSize = SHARE_SIZES[ratio] ?? SHARE_SIZES.feed;
   canvas.width = size.w;
@@ -33,7 +32,6 @@ export function createPainter(
     size,
     skin: PALETTES[theme ?? 'paper'] ?? PALETTES.paper,
     s,
-    photoScale: Math.min(1.4, Math.max(0.6, photoScale)),
     x: (v) => v * s,
     y: (v) => size.safeTop + v * vs,
     vh: (v) => v * vs,

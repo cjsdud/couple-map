@@ -266,11 +266,12 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
               {
                 key: 'photo',
                 label: '사진 카드',
-                paint: (canvas, { theme, ratio, caption, photoUrls, photoScale }) =>
+                paint: (canvas, { theme, ratio, caption, photoUrls, adjusts, photoAlign }) =>
                   paintRecordCard(canvas, {
                     theme,
                     ratio,
-                    photoScale,
+                    adjusts,
+                    photoAlign,
                     date: record.date,
                     spotNames: spots.map((s) => s.name),
                     memo: caption,
@@ -290,7 +291,8 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                         paintFullBleedCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
-                          photoScale: o.photoScale,
+                          adjusts: o.adjusts,
+                          photoAlign: o.photoAlign,
                           date: record.date,
                           title: spots[0]?.name ?? null,
                           subtitle: spots.map((s) => s.name).join('  →  '),
@@ -308,7 +310,8 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                         paintPolaroidCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
-                          photoScale: o.photoScale,
+                          adjusts: o.adjusts,
+                          photoAlign: o.photoAlign,
                           date: record.date,
                           subtitle: spots.map((s) => s.name).join('  →  '),
                           caption: o.caption,
@@ -328,7 +331,8 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                         paintFilmStripCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
-                          photoScale: o.photoScale,
+                          adjusts: o.adjusts,
+                          photoAlign: o.photoAlign,
                           date: record.date,
                           subtitle: spots.map((s) => s.name).join('  →  '),
                           caption: o.caption,
@@ -343,11 +347,12 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                 key: 'ticket',
                 label: '티켓',
                 maxPhotos: 1,
-                paint: (canvas, { theme, ratio, caption, photoUrls, photoScale }) =>
+                paint: (canvas, { theme, ratio, caption, photoUrls, adjusts, photoAlign }) =>
                   paintTicketCard(canvas, {
                     theme,
                     ratio,
-                    photoScale,
+                    adjusts,
+                    photoAlign,
                     date: record.date,
                     spotNames: spots.map((s) => s.name),
                     caption,
@@ -360,11 +365,12 @@ export default function RecordDetailSheet({ recordId, onClose, onEdit }: Props) 
                 key: 'magazine',
                 label: '매거진',
                 maxPhotos: 1,
-                paint: (canvas, { theme, ratio, caption, photoUrls, photoScale }) =>
+                paint: (canvas, { theme, ratio, caption, photoUrls, adjusts, photoAlign }) =>
                   paintMagazineCard(canvas, {
                     theme,
                     ratio,
-                    photoScale,
+                    adjusts,
+                    photoAlign,
                     date: record.date,
                     title: spots[0]?.name ?? null,
                     subtitle: spots.map((s) => s.name).join('  →  '),

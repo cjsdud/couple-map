@@ -5,7 +5,24 @@
  * 내부에서 painter(p.x/p.y/p.vh)로 실제 픽셀로 옮긴다.
  * roundRect처럼 경로만 그리는 저수준 함수만 실제 픽셀을 받는다.
  */
-import type { Painter } from './types';
+import type { Painter, PhotoAdjust, PhotoAlign } from './types';
+
+/** 사진을 붙일 때의 기본 기울기 — 손으로 놓은 느낌 (사용자가 만지면 그 값이 이긴다) */
+export const DEFAULT_TILTS = [-2, 1.6, 1.4, -1.8];
+
+/** 사진별 조정값 — 없으면 기본값 (기울기 기본은 레이아웃이 정한 값을 넘긴다) */
+export function adjustAt(
+  adjusts: PhotoAdjust[] | undefined,
+  i: number,
+  fallbackTilt = 0,
+): { scale: number; focus: number; tilt: number } {
+  const a = adjusts?.[i];
+  return {
+    scale: a ? Math.min(1.4, Math.max(0.6, a.scale)) : 1,
+    focus: a ? Math.min(1, Math.max(0, a.focus)) : 0.38,
+    tilt: a ? a.tilt : fallbackTilt,
+  };
+}
 
 /** 실제 픽셀 좌표로 둥근 사각형 경로 */
 export function roundRect(
@@ -247,6 +264,7 @@ export function drawFramedPhoto(
   w: number,
   h: number,
   deg: number,
+  focus = 0.5,
 ) {
   const { ctx, skin } = p;
   const { mat, radius, shadow, border } = skin.frame;
@@ -275,8 +293,8 @@ export function drawFramedPhoto(
   ctx.save();
   roundRect(ctx, -w / 2 + pad, -h / 2 + pad, dw, dh, Math.max(2, r - 4 * p.s));
   ctx.clip();
-  // 비율을 맞춰 놨으므로 잘릴 일이 없다 (반올림 오차만 흡수)
-  drawCover(ctx, tuned(p, img), -w / 2 + pad, -h / 2 + pad, dw, dh, 0.5);
+  // 비율을 맞춰 놨으면 잘릴 일이 없고, 크게 키운 사진만 focus만큼 위아래를 골라 남긴다
+  drawCover(ctx, tuned(p, img), -w / 2 + pad, -h / 2 + pad, dw, dh, focus);
   tintOver(p, -w / 2 + pad, -h / 2 + pad, dw, dh);
   ctx.restore();
   ctx.restore();
@@ -454,9 +472,15 @@ export function paintPhotoGrid(
   top: number,
   height: number,
   total = 0,
+  opts: { adjusts?: PhotoAdjust[]; align?: PhotoAlign } = {},
 ): number {
   const { ctx, skin } = p;
-  const shots = images.filter((i): i is Drawable => i !== null).slice(0, 4);
+  // 조정값은 사진 순서에 붙어 있다 — 못 불러온 사진을 걸러내기 전에 짝지어 둬야 어긋나지 않는다
+  const paired = images
+    .map((img, i) => ({ img, adj: adjustAt(opts.adjusts, i, DEFAULT_TILTS[i % DEFAULT_TILTS.length]) }))
+    .filter((x): x is { img: Drawable; adj: ReturnType<typeof adjustAt> } => x.img !== null)
+    .slice(0, 4);
+  const shots = paired.map((x) => x.img);
   if (shots.length === 0) return top;
 
   const pad = skin.frame.pad * p.s;
@@ -465,8 +489,6 @@ export function paintPhotoGrid(
   const areaY = p.y(top);
   const areaH = p.vh(height);
   const gap = 18 * p.s;
-  // 사진 크기 슬라이더 — 칸을 크게 넘어서면 서로 겹치므로 위쪽만 살짝 묶어 둔다
-  const scale = Math.min(1.12, p.photoScale);
 
   const ars = shots.map((s) => (s.width && s.height ? s.width / s.height : 1));
   const allPortrait = ars.every((a) => a < 0.95);
@@ -478,7 +500,6 @@ export function paintPhotoGrid(
   else rows = [[0, 1], [2, 3]];
 
   const rowH = (areaH - gap * (rows.length - 1)) / rows.length;
-  const tilts = [-2, 1.6, 1.4, -1.8];
   let lastCell: { cx: number; cy: number; w: number; h: number } | null = null;
 
   // 줄마다 실제 크기를 먼저 구한다 — 사진이 칸보다 작으면 그만큼 위로 붙여 빈 공간을 없앤다
@@ -491,13 +512,17 @@ export function paintPhotoGrid(
       let ph = innerH;
       if (innerW / innerH > ars[i]) pw = innerH * ars[i];
       else ph = innerW / ars[i];
-      return { w: (pw + pad * 2) * scale, h: (ph + pad * 2) * scale };
+      // 사진마다 크기가 다르다 — 칸을 크게 넘어서면 서로 겹치므로 위쪽만 살짝 묶어 둔다
+      const k = Math.min(1.12, paired[i].adj.scale);
+      return { w: (pw + pad * 2) * k, h: (ph + pad * 2) * k };
     });
     return { row, sizes, h: Math.max(...sizes.map((s2) => s2.h)) };
   });
   const usedH = laid.reduce((a, b) => a + b.h, 0) + gap * (laid.length - 1);
-  // 남는 공간은 위아래로 반반 — 사진이 작게 들어간 날에도 카드가 위로 쏠리지 않게
-  let bandY = areaY + Math.max(0, (areaH - usedH) / 2);
+  // 남는 공간을 어디로 보낼지 — 기본은 위아래 반반, 사용자가 '위/아래'를 고르면 그쪽으로 붙인다
+  const slack = Math.max(0, areaH - usedH);
+  const alignRatio = opts.align === 'top' ? 0 : opts.align === 'bottom' ? 1 : 0.5;
+  let bandY = areaY + slack * alignRatio;
 
   for (const { row, sizes, h: bandH } of laid) {
     const rowW = sizes.reduce((a, b) => a + b.w, 0) + gap * (row.length - 1);
@@ -506,7 +531,7 @@ export function paintPhotoGrid(
       const { w, h } = sizes[k];
       const cx = x + w / 2;
       const cy = bandY + bandH / 2;
-      drawFramedPhoto(p, shots[i], cx, cy, w, h, tilts[i % tilts.length]);
+      drawFramedPhoto(p, shots[i], cx, cy, w, h, paired[i].adj.tilt, paired[i].adj.focus);
       lastCell = { cx, cy, w, h };
       x += w + gap;
     }

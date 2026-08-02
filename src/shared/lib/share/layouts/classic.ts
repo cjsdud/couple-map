@@ -19,13 +19,15 @@ import {
 } from '../draw';
 import { createPainter } from '../painter';
 import { stickerRow, stickerTexts, type CardStickers } from '../stickers';
-import type { Painter, ShareRatio, ShareTheme } from '../types';
+import type { Painter, PhotoAdjust, PhotoAlign, ShareRatio, ShareTheme } from '../types';
 
 interface Common {
   theme?: ShareTheme;
   ratio?: ShareRatio;
-  /** 사진 칸 배율 (사용자 슬라이더) */
-  photoScale?: number;
+  /** 사진별 조정값 (크기·크롭 위치·기울기) — photoUrls와 같은 순서 */
+  adjusts?: PhotoAdjust[];
+  /** 사진 묶음이 카드 안에서 놓이는 자리 */
+  photoAlign?: PhotoAlign;
   /** 자동으로 붙는 스티커 (계획 §5) */
   stickers?: CardStickers;
 }
@@ -41,7 +43,7 @@ export interface RecordCardData extends Common {
 
 /** 데이트 기록 카드 — 지출은 명세 §4 원칙대로 넣지 않는다 */
 export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
+  const p = createPainter(canvas, data.theme, data.ratio);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#e8637c');
   await loadShareFonts();
@@ -78,7 +80,10 @@ export async function paintRecordCard(canvas: HTMLCanvasElement, data: RecordCar
   const photoTop = flow + 14;
   let photoEnd = photoTop;
   if (hasPhotos && photoBottom - photoTop > 240) {
-    photoEnd = paintPhotoGrid(p, images, photoTop, photoBottom - photoTop, data.photoUrls.length);
+    photoEnd = paintPhotoGrid(p, images, photoTop, photoBottom - photoTop, data.photoUrls.length, {
+      adjusts: data.adjusts,
+      align: data.photoAlign,
+    });
   }
 
   if (data.memo) {
@@ -128,7 +133,7 @@ export interface DayCardData extends Common {
 }
 
 export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
+  const p = createPainter(canvas, data.theme, data.ratio);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#f2c14e');
   await loadShareFonts();
@@ -211,7 +216,12 @@ export async function paintDayCard(canvas: HTMLCanvasElement, data: DayCardData)
   const bottomReserve = caption ? 200 : 110;
   const photoTop = Math.max(bubbleY + 20, 780);
   const photoH = Math.min(430, 1350 - bottomReserve - photoTop);
-  if (photoH >= 200) paintPhotoGrid(p, images, photoTop, photoH, data.photoUrls.length);
+  if (photoH >= 200) {
+    paintPhotoGrid(p, images, photoTop, photoH, data.photoUrls.length, {
+      adjusts: data.adjusts,
+      align: data.photoAlign,
+    });
+  }
 
   paintGrain(p);
 
@@ -240,7 +250,7 @@ export interface RecapCardData extends Common {
 }
 
 export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardData) {
-  const p: Painter = createPainter(canvas, data.theme, data.ratio, data.photoScale);
+  const p: Painter = createPainter(canvas, data.theme, data.ratio);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#8cab68');
   await loadShareFonts();
@@ -272,7 +282,10 @@ export async function paintRecapCard(canvas: HTMLCanvasElement, data: RecapCardD
   }
 
   if (hasPhotos) {
-    paintPhotoGrid(p, images, 480, 600, data.photoTotal ?? data.photoUrls.length);
+    paintPhotoGrid(p, images, 480, 600, data.photoTotal ?? data.photoUrls.length, {
+      adjusts: data.adjusts,
+      align: data.photoAlign,
+    });
   } else {
     heartDoodle(p, 540, 830, 300, accent);
   }

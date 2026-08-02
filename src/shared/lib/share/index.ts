@@ -7,7 +7,16 @@
  */
 export { SHARE_THEMES } from './palettes';
 export { SHARE_RATIOS, SHARE_SIZES, BASE_W, BASE_H } from './sizes';
-export type { CardSize, Painter, ShareRatio, ShareTheme, Skin } from './types';
+export type {
+  CardSize,
+  Painter,
+  PhotoAdjust,
+  PhotoAlign,
+  ShareRatio,
+  ShareTheme,
+  Skin,
+} from './types';
+export { DEFAULT_TILTS } from './draw';
 export {
   paintDayCard,
   paintRecapCard,

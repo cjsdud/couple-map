@@ -833,7 +833,8 @@ export function DayDetailSheet({
                   paintDayCard(canvas, {
                     theme: o.theme,
                     ratio: o.ratio,
-                    photoScale: o.photoScale,
+                    adjusts: o.adjusts,
+                    photoAlign: o.photoAlign,
                     date,
                     myName: myName ?? undefined,
                     partnerName: partnerName ?? undefined,
@@ -860,7 +861,8 @@ export function DayDetailSheet({
                         paintFullBleedCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
-                          photoScale: o.photoScale,
+                          adjusts: o.adjusts,
+                          photoAlign: o.photoAlign,
                           date,
                           title: `${m}월 ${d}일의 우리`,
                           subtitle: null,
@@ -878,7 +880,8 @@ export function DayDetailSheet({
                         paintPolaroidCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
-                          photoScale: o.photoScale,
+                          adjusts: o.adjusts,
+                          photoAlign: o.photoAlign,
                           date,
                           caption: o.caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],
@@ -897,7 +900,8 @@ export function DayDetailSheet({
                         paintFilmStripCard(canvas, {
                           theme: o.theme,
                           ratio: o.ratio,
-                          photoScale: o.photoScale,
+                          adjusts: o.adjusts,
+                          photoAlign: o.photoAlign,
                           date,
                           caption: o.caption || myEntry?.note || partnerEntry?.note || null,
                           regionNames: [],

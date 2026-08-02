@@ -12,6 +12,25 @@ export type ShareTheme = 'paper' | 'film' | 'mono' | 'sunset' | 'vintage' | 'pas
 /** 비율 3종 (계획 §6) */
 export type ShareRatio = 'feed' | 'square' | 'story';
 
+/**
+ * 사진 한 장의 조정값 — 사용자가 카드 안에서 손댈 수 있는 전부.
+ *
+ * 자유도를 최소한으로 쪼갰다: 크게/작게, 어디를 보여줄지, 얼마나 기울일지.
+ * 위치를 마음대로 끌어다 놓게 하지 않는 이유는 계획 §2 — 무엇을 골라도 실패하지 않아야 한다.
+ */
+export interface PhotoAdjust {
+  url: string;
+  /** 칸 대비 크기 배율 (작게 0.78 · 보통 1 · 크게 1.28) */
+  scale: number;
+  /** 세로로 어디를 남길지 0(위)~1(아래). 인물은 얼굴이 위쪽이라 기본이 0.38 */
+  focus: number;
+  /** 기울기(도) — 손으로 붙인 느낌 */
+  tilt: number;
+}
+
+/** 사진 묶음이 카드 안에서 놓이는 자리 */
+export type PhotoAlign = 'top' | 'center' | 'bottom';
+
 export interface CardSize {
   key: ShareRatio;
   label: string;
@@ -85,8 +104,6 @@ export interface Painter {
   skin: Skin;
   /** 가로 배율 (1080 기준) — 글자·선 굵기에 곱한다 */
   s: number;
-  /** 사진 칸 배율 — 사용자가 슬라이더로 정한다 (1 = 기본) */
-  photoScale: number;
   /** 1080 기준 x → 실제 x */
   x: (v: number) => number;
   /** 1350 기준 y → 실제 y (안전 영역 반영) */

@@ -7,6 +7,7 @@
  */
 import { loadShareFonts } from '../../shareFonts';
 import {
+  adjustAt,
   drawCover,
   drawText,
   type Drawable,
@@ -21,13 +22,15 @@ import {
 } from '../draw';
 import { createPainter } from '../painter';
 import { stickerRow, stickerTexts, type CardStickers } from '../stickers';
-import type { Painter, ShareRatio, ShareTheme } from '../types';
+import type { Painter, PhotoAdjust, PhotoAlign, ShareRatio, ShareTheme } from '../types';
 
 export interface ExtraCardData {
   theme?: ShareTheme;
   ratio?: ShareRatio;
-  /** 사진 칸 배율 (사용자 슬라이더) */
-  photoScale?: number;
+  /** 사진별 조정값 (크기·크롭 위치·기울기) — photoUrls와 같은 순서 */
+  adjusts?: PhotoAdjust[];
+  /** 사진 묶음이 카드 안에서 놓이는 자리 */
+  photoAlign?: PhotoAlign;
   date: string;
   /** 코스 — 티켓의 표에 줄줄이 들어간다 */
   spotNames?: string[];
@@ -43,7 +46,7 @@ const dotted = (date: string) => date.replace(/-/g, '. ');
 
 // ── 필름 스트립 ──────────────────────────────────────────────────
 export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
+  const p = createPainter(canvas, data.theme, data.ratio);
   const { ctx, skin } = p;
   await loadShareFonts();
   const images = (await Promise.all(data.photoUrls.slice(0, 4).map(loadImage))).filter(
@@ -80,6 +83,7 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
   const gap = 14;
   const frameH = (1350 - top - bottomText - gap * count) / count;
   for (const [i, img] of images.entries()) {
+    const adj = adjustAt(data.adjusts, i);
     const fy = top + i * (frameH + gap);
     const x = p.x(innerX);
     const y = p.y(fy);
@@ -89,7 +93,7 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
     ctx.beginPath();
     ctx.rect(x, y, w, h);
     ctx.clip();
-    drawCover(ctx, tuned(p, img), x, y, w, h);
+    drawCover(ctx, tuned(p, img), x, y, w, h, adj.focus);
     tintOver(p, x, y, w, h);
     ctx.restore();
   }
@@ -127,11 +131,12 @@ export async function paintFilmStripCard(canvas: HTMLCanvasElement, data: ExtraC
 
 // ── 티켓 ─────────────────────────────────────────────────────────
 export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
+  const p = createPainter(canvas, data.theme, data.ratio);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#e8637c');
   await loadShareFonts();
   const img = await loadImage(data.photoUrls[0] ?? '');
+  const adj = adjustAt(data.adjusts, 0);
 
   skin.paintBg(p);
 
@@ -155,7 +160,7 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
   // 위쪽: 사진 띠 (있으면) + 제목
   let cursor = ty + 96;
   if (img) {
-    const ph = Math.round(300 * p.photoScale);
+    const ph = Math.round(300 * adj.scale);
     ctx.save();
     // 티켓 모서리를 따라 자른다 — 사각으로 자르면 위 모서리가 각져 카드 밖으로 튀어 보인다
     roundRect(ctx, p.x(tx), p.y(ty), p.x(tw), p.vh(th), 22 * p.s);
@@ -163,7 +168,7 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
     ctx.beginPath();
     ctx.rect(p.x(tx), p.y(ty), p.x(tw), p.vh(ph));
     ctx.clip();
-    drawCover(ctx, tuned(p, img), p.x(tx), p.y(ty), p.x(tw), p.vh(ph));
+    drawCover(ctx, tuned(p, img), p.x(tx), p.y(ty), p.x(tw), p.vh(ph), adj.focus);
     tintOver(p, p.x(tx), p.y(ty), p.x(tw), p.vh(ph));
     ctx.restore();
     cursor = ty + ph + 92;
@@ -276,11 +281,12 @@ export async function paintTicketCard(canvas: HTMLCanvasElement, data: ExtraCard
 
 // ── 매거진 ───────────────────────────────────────────────────────
 export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
+  const p = createPainter(canvas, data.theme, data.ratio);
   const { ctx, skin } = p;
   const accent = skin.accentFor('#e8637c');
   await loadShareFonts();
   const img = await loadImage(data.photoUrls[0] ?? '');
+  const adj = adjustAt(data.adjusts, 0);
 
   skin.paintBg(p);
 
@@ -319,14 +325,14 @@ export async function paintMagazineCard(canvas: HTMLCanvasElement, data: ExtraCa
 
   // 사진 — 넓은 가로 컷
   if (img) {
-    const ph = Math.round(560 * p.photoScale);
+    const ph = Math.round(560 * adj.scale);
     const x = p.x(m);
     const w = p.x(1080 - m * 2);
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, p.y(y), w, p.vh(ph));
     ctx.clip();
-    drawCover(ctx, tuned(p, img), x, p.y(y), w, p.vh(ph));
+    drawCover(ctx, tuned(p, img), x, p.y(y), w, p.vh(ph), adj.focus);
     tintOver(p, x, p.y(y), w, p.vh(ph));
     ctx.restore();
     y += ph + 56;

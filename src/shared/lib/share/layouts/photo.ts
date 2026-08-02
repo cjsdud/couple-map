@@ -8,6 +8,7 @@
  */
 import { loadShareFonts } from '../../shareFonts';
 import {
+  adjustAt,
   drawCover,
   drawText,
   fitLines,
@@ -21,13 +22,15 @@ import {
 } from '../draw';
 import { createPainter } from '../painter';
 import { filmDateStamp, rubberStamp, stickerColumn, stickerTexts, type CardStickers } from '../stickers';
-import type { Painter, ShareRatio, ShareTheme } from '../types';
+import type { Painter, PhotoAdjust, PhotoAlign, ShareRatio, ShareTheme } from '../types';
 
 export interface PhotoCardData {
   theme?: ShareTheme;
   ratio?: ShareRatio;
-  /** 사진 칸 배율 (사용자 슬라이더) */
-  photoScale?: number;
+  /** 사진별 조정값 (크기·크롭 위치·기울기) — photoUrls와 같은 순서 */
+  adjusts?: PhotoAdjust[];
+  /** 사진 묶음이 카드 안에서 놓이는 자리 */
+  photoAlign?: PhotoAlign;
   /** 2026-07-25 */
   date: string;
   /** 큰 글씨 — 없으면 날짜를 쓴다 */
@@ -46,14 +49,16 @@ const dotted = (date: string) => date.replace(/-/g, '. ');
 
 // ── 풀블리드 ─────────────────────────────────────────────────────
 export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
+  const p = createPainter(canvas, data.theme, data.ratio);
   const { ctx, skin } = p;
   await loadShareFonts();
   const img = await loadImage(data.photoUrls[0] ?? '');
 
+  // 풀블리드는 사진이 카드를 통째로 채운다 — 크기·기울기는 뜻이 없고 '어디를 보여줄지'만 쓴다
+  const adj = adjustAt(data.adjusts, 0);
   skin.paintBg(p);
   if (img) {
-    drawCover(ctx, tuned(p, img), 0, 0, p.W, p.H);
+    drawCover(ctx, tuned(p, img), 0, 0, p.W, p.H, adj.focus);
     tintOver(p, 0, 0, p.W, p.H);
   }
 
@@ -152,7 +157,7 @@ export async function paintFullBleedCard(canvas: HTMLCanvasElement, data: PhotoC
 
 // ── 폴라로이드 ───────────────────────────────────────────────────
 export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCardData) {
-  const p = createPainter(canvas, data.theme, data.ratio, data.photoScale);
+  const p = createPainter(canvas, data.theme, data.ratio);
   const { ctx, skin } = p;
   await loadShareFonts();
   const img = await loadImage(data.photoUrls[0] ?? '');
@@ -164,7 +169,8 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
   const cardY = 150;
   const cardW = 888;
   const cardH = 1010;
-  const deg = -1.4;
+  const adj = adjustAt(data.adjusts, 0, -1.4);
+  const deg = adj.tilt;
   ctx.save();
   ctx.translate(p.x(cardX + cardW / 2), p.y(cardY + cardH / 2));
   ctx.rotate((deg * Math.PI) / 180);
@@ -187,8 +193,8 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
   // 사진 — 폴라로이드 규칙대로 위·좌·우 여백은 같고 아래만 넓다
   const pad = p.x(46);
   const photoW = w - pad * 2;
-  // 사진 칸 크기 — 슬라이더로 조절. 매트 안에서 위·좌·우 여백은 유지한다
-  const photoH = Math.min(h - pad * 2 - p.vh(150), p.vh(760) * p.photoScale);
+  // 사진 칸 크기 — 사진별 설정. 매트 안에서 위·좌·우 여백은 유지한다
+  const photoH = Math.min(h - pad * 2 - p.vh(150), p.vh(760) * adj.scale);
   const px = -w / 2 + pad;
   const py = -h / 2 + pad;
   if (img) {
@@ -196,7 +202,7 @@ export async function paintPolaroidCard(canvas: HTMLCanvasElement, data: PhotoCa
     ctx.beginPath();
     ctx.rect(px, py, photoW, photoH);
     ctx.clip();
-    drawCover(ctx, tuned(p, img), px, py, photoW, photoH);
+    drawCover(ctx, tuned(p, img), px, py, photoW, photoH, adj.focus);
     tintOver(p, px, py, photoW, photoH);
     ctx.restore();
   } else {
