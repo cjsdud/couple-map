@@ -43,6 +43,17 @@ export function isInAppBrowser(): boolean {
 
 export function installStep(): InstallStep {
   if (isStandalone()) return 'installed';
+  return platformStep();
+}
+
+/**
+ * 설치 여부를 빼고 **플랫폼만** 본 안내 단계.
+ *
+ * 소개 페이지(/install)는 이미 설치한 사람이 열어도 같은 화면을 보여준다 —
+ * 이 주소는 남에게 보내는 소개 링크라, 보낸 사람과 받은 사람이 서로 다른 걸 보면
+ * "내가 본 그 화면"을 이야기할 수 없다 (사용자 결정 2026-08-02).
+ */
+export function platformStep(): InstallStep {
   if (isIOS()) return isInAppBrowser() ? 'ios-inapp' : 'ios-safari';
   if (isAndroid()) return isInAppBrowser() ? 'android-inapp' : 'android';
   return 'desktop';

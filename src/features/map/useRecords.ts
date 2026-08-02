@@ -283,21 +283,42 @@ export function isMock() {
   return new URLSearchParams(window.location.search).has('mock');
 }
 
+/** 기록 조회 컬럼 — note는 0016 마이그레이션 이후에만 존재한다 */
+const SPOT_COLS = 'id, seq, name, lat, lng, sigungu_code, kakao_place_id';
+const recordSelect = (withNote: boolean) =>
+  `id, date, memo, status, spots (${SPOT_COLS}${withNote ? ', note' : ''}), expenses (id, category, amount, paid_by)`;
+
+/** 없는 컬럼을 고른 경우인가 (PostgREST 42703) — 마이그레이션 전 프로젝트 판별용 */
+function isMissingColumn(error: { code?: string; message?: string }): boolean {
+  return error.code === '42703' || /column .* does not exist/i.test(error.message ?? '');
+}
+
 export function useRecords() {
   return useQuery({
     queryKey: ['records'],
     queryFn: async (): Promise<RecordRow[]> => {
       if (isMock()) return MOCK_RECORDS;
       if (!supabase) return [];
-      const { data, error } = await supabase
-        .from('records')
-        .select(
-          'id, date, memo, status, spots (id, seq, name, lat, lng, sigungu_code, kakao_place_id, note), expenses (id, category, amount, paid_by)',
-        )
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as RecordRow[];
+      const sb = supabase;
+      const run = (withNote: boolean) =>
+        sb
+          .from('records')
+          .select(recordSelect(withNote))
+          .order('date', { ascending: false })
+          .order('created_at', { ascending: false });
+
+      const { data, error } = await run(true);
+      if (!error) return data as unknown as RecordRow[];
+      // 0016(spots.note)을 아직 적용하지 않은 프로젝트 — 한마디 없이라도 기록은 보여야 한다.
+      //   이 방어가 없으면 컬럼 하나 때문에 지도·타임라인이 통째로 비어 버린다.
+      if (!isMissingColumn(error)) throw error;
+      const retry = await run(false);
+      if (retry.error) throw retry.error;
+      type LegacyRow = Omit<RecordRow, 'spots'> & { spots: Omit<SpotRow, 'note'>[] };
+      return (retry.data as unknown as LegacyRow[]).map((r) => ({
+        ...r,
+        spots: r.spots.map((sp) => ({ ...sp, note: null })),
+      }));
     },
   });
 }
