@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
 import { coupleStateKey } from '../couple/useCoupleState';
-import type { ExpenseCategory } from '../map/useRecords';
 
 const DAY_MS = 86_400_000;
 
@@ -109,44 +108,6 @@ export function nextOccurrence(date: string, today: string): { date: string; dDa
     if (d.getTime() < now) d = new Date(d.getFullYear() + 1, m - 1, day, 12);
   }
   return { date: toDateString(d), dDay: Math.round((d.getTime() - now) / DAY_MS) };
-}
-
-export interface MonthlyExpenseRow {
-  amount: number;
-  category: ExpenseCategory;
-  paid_by: string | null;
-  record_id: string;
-}
-
-/** 이번 달 가계부: 합계·횟수·평균·밸런스 입력 데이터 (명세 §4) */
-export function useMonthlyExpenses(year: number, month: number) {
-  return useQuery({
-    queryKey: ['monthly-expenses', year, month],
-    queryFn: async (): Promise<MonthlyExpenseRow[]> => {
-      if (new URLSearchParams(window.location.search).has('mock')) {
-        // useRecords MOCK_RECORDS의 7월 지출(mock-1·4·5·9)과 동기 유지 (2026-07-24)
-        return [
-          { amount: 31000, category: 'meal', paid_by: 'b', record_id: 'mock-9' },
-          { amount: 42000, category: 'meal', paid_by: 'b', record_id: 'mock-4' },
-          { amount: 18000, category: 'cafe', paid_by: 'a', record_id: 'mock-4' },
-          { amount: 34000, category: 'meal', paid_by: 'a', record_id: 'mock-1' },
-          { amount: 11000, category: 'cafe', paid_by: 'b', record_id: 'mock-1' },
-          { amount: 6000, category: 'play', paid_by: 'a', record_id: 'mock-5' },
-          { amount: 15000, category: 'cafe', paid_by: 'a', record_id: 'mock-5' },
-        ];
-      }
-      if (!supabase) return [];
-      const first = `${year}-${String(month).padStart(2, '0')}-01`;
-      const last = toDateString(new Date(year, month, 0));
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('amount, category, paid_by, record_id, records!inner(date)')
-        .gte('records.date', first)
-        .lte('records.date', last);
-      if (error) throw error;
-      return data as unknown as MonthlyExpenseRow[];
-    },
-  });
 }
 
 export interface CoupleSettingsPatch {

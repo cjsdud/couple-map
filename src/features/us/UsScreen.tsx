@@ -13,7 +13,10 @@ import {
 } from '../../shared/lib/theme';
 import { useCoupleState, useUpdateNickname, type Couple } from '../couple/useCoupleState';
 import { useStreakDays } from '../today/useToday';
-import { categoryLabel, useCoupleMembers } from '../map/useRecords';
+import { categoryLabel, useCoupleMembers, useRecords } from '../map/useRecords';
+import RecordDetailSheet from '../map/RecordDetailSheet';
+import ExpenseSheet from './ExpenseSheet';
+import { balanceLineOf, monthKeyOf, payerNameOf, summarizeMonth } from './expenseSummary';
 import {
   dPlus,
   nextOccurrence,
@@ -21,7 +24,6 @@ import {
   useAddAnniversary,
   useAnniversaries,
   useDeleteAnniversary,
-  useMonthlyExpenses,
   useUpdateCouple,
 } from './useUs';
 
@@ -35,12 +37,15 @@ export default function UsScreen() {
   const isMock = new URLSearchParams(window.location.search).has('mock');
   const startedAt = couple?.started_at ?? (isMock ? '2026-01-24' : null);
   const today = toDateString(new Date());
+  // 가계부: 월간 카드 → 상세 시트 → 그 안에서 기록 상세까지 (새 화면 없이 레이어로만)
+  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [detailRecordId, setDetailRecordId] = useState<string | null>(null);
 
   return (
     <main className="space-y-4 px-4 py-6">
       <h1 className="text-2xl font-bold">우리</h1>
       <DdayCard startedAt={startedAt} today={today} coupleId={couple?.id} mock={isMock} />
-      <ExpenseMonthCard today={today} />
+      <ExpenseMonthCard today={today} onOpen={() => setExpenseOpen(true)} />
       <ThemeCard couple={couple} userId={userId} mock={isMock} />
       <SettingsCard
         coupleId={couple?.id}
@@ -50,6 +55,15 @@ export default function UsScreen() {
         dayCutoff={couple?.day_cutoff ?? 0}
         startedAt={startedAt}
       />
+
+      <ExpenseSheet
+        open={expenseOpen}
+        onClose={() => setExpenseOpen(false)}
+        today={today}
+        onSelectRecord={setDetailRecordId}
+      />
+      {/* 가계부 시트 위에 겹쳐 뜬다 — 닫으면 보던 달로 그대로 돌아온다 */}
+      <RecordDetailSheet recordId={detailRecordId} onClose={() => setDetailRecordId(null)} />
     </main>
   );
 }
@@ -298,37 +312,27 @@ function ThemeCard({
   );
 }
 
-// ── 가계부 월간 카드: 합계·횟수·평균·밸런스 (정산 압박·경고색 금지) ──
-function ExpenseMonthCard({ today }: { today: string }) {
+// ── 가계부 월간 카드: 합계·횟수·평균·밸런스 (정산 압박·경고색 금지).
+//    카드를 누르면 월 이동·카테고리 비중·지출 목록이 있는 상세 시트가 열린다 ──
+function ExpenseMonthCard({ today, onOpen }: { today: string; onOpen: () => void }) {
   const [y, m] = today.split('-').map(Number);
-  const { data: rows = [] } = useMonthlyExpenses(y, m);
+  // 상세 시트와 **같은 집계 함수**를 쓴다 — 예전엔 카드만 별도 쿼리라 숫자가 어긋났다
+  const { data: records = [] } = useRecords();
   const members = useCoupleMembers();
-
-  const total = rows.reduce((s, r) => s + r.amount, 0);
-  const dateCount = new Set(rows.map((r) => r.record_id)).size;
-  const average = dateCount > 0 ? Math.round(total / dateCount) : 0;
-
-  const byPayer = new Map<string, number>();
-  for (const r of rows) {
-    if (r.paid_by) byPayer.set(r.paid_by, (byPayer.get(r.paid_by) ?? 0) + r.amount);
-  }
-  const paidTotal = [...byPayer.values()].reduce((a, b) => a + b, 0);
-  let balanceLine = '이번 달은 사이좋게 나눠 내고 있어요';
-  if (paidTotal > 0) {
-    const [topId, topAmount] = [...byPayer.entries()].sort((a, b) => b[1] - a[1])[0];
-    if (topAmount / paidTotal >= 0.6) {
-      const nick = members.data?.find((mem) => mem.user_id === topId)?.nickname ?? '짝꿍';
-      balanceLine = `이번 달엔 ${nick} 쪽에서 좀 더 자주 냈어요`;
-    }
-  }
-
-  const byCategory = new Map<string, number>();
-  for (const r of rows) byCategory.set(r.category, (byCategory.get(r.category) ?? 0) + r.amount);
+  const { total, dateCount, average, categories, byPayer } = summarizeMonth(records, monthKeyOf(y, m));
+  const balanceLine = balanceLineOf(byPayer, (userId) => payerNameOf(members.data, userId));
 
   return (
-    <section className="space-y-3 rounded-2xl border-2 border-ink/15 bg-white/60 p-4">
-      <h2 className="text-sm font-semibold">{m}월 데이트 가계부</h2>
-      {rows.length === 0 ? (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full space-y-3 rounded-2xl border-2 border-ink/15 bg-white/60 p-4 text-left active:translate-y-px"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">{m}월 데이트 가계부</h2>
+        <span className="text-xs opacity-40">자세히 ›</span>
+      </div>
+      {dateCount === 0 ? (
         <p className="text-sm opacity-60">이번 달 지출 기록이 아직 없어요 — 데이트 기록에 살짝 적어 두면 여기에 모아 드려요</p>
       ) : (
         <>
@@ -347,15 +351,12 @@ function ExpenseMonthCard({ today }: { today: string }) {
             </div>
           </div>
           <p className="text-sm opacity-70">
-            {[...byCategory.entries()]
-              .sort((a, b) => b[1] - a[1])
-              .map(([c, v]) => `${categoryLabel(c)} ${Math.round((v / total) * 100)}%`)
-              .join(' · ')}
+            {categories.map(([c, v]) => `${categoryLabel(c)} ${Math.round((v / total) * 100)}%`).join(' · ')}
           </p>
           <p className="rounded-xl rounded-tl-sm bg-sky/25 px-3 py-2 text-sm">{balanceLine}</p>
         </>
       )}
-    </section>
+    </button>
   );
 }
 
