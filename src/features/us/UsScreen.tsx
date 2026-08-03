@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { signOut, useSession } from '../../shared/lib/auth';
 import ActivityBell from '../activity/ActivityBell';
+import { useIsAdmin } from '../admin/useIsAdmin';
 import { usePush } from '../push/usePush';
 import { calcStreak, entryDateFor, toDateString } from '../../shared/lib/daily';
 import { supabase } from '../../shared/lib/supabase';
@@ -37,6 +38,7 @@ export default function UsScreen() {
   const couple = coupleQuery.data?.couple ?? null;
   const profile = coupleQuery.data?.profile ?? null;
   const isMock = new URLSearchParams(window.location.search).has('mock');
+  const isAdmin = useIsAdmin();
   const startedAt = couple?.started_at ?? (isMock ? '2026-01-24' : null);
   const today = toDateString(new Date());
   // 가계부: 월간 카드 → 상세 시트 → 그 안에서 기록 상세까지 (새 화면 없이 레이어로만)
@@ -70,6 +72,16 @@ export default function UsScreen() {
         dayCutoff={couple?.day_cutoff ?? 0}
         startedAt={startedAt}
       />
+
+      {/* 관리자 계정에만 보이는 지름길 — 판별·데이터 접근은 전부 서버(ADMIN_USER_IDS)가 한다 */}
+      {isAdmin && (
+        <a
+          href="/admin"
+          className="block rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-5 py-3.5 text-center text-sm font-bold shadow-sm active:translate-y-px"
+        >
+          🛠️ 관리자 현황 보기
+        </a>
+      )}
 
       <ExpenseSheet
         open={expenseOpen}

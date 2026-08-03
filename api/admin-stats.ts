@@ -13,7 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 
 interface VercelRequest {
   method?: string;
-  body?: { accessToken?: string };
+  body?: { accessToken?: string; probe?: boolean };
 }
 interface VercelResponse {
   status(code: number): VercelResponse;
@@ -75,6 +75,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!adminIds.includes(callerId)) {
       // 첫 설정용: 자기 id를 보여줘서 환경변수에 그대로 넣을 수 있게 한다
       res.status(403).json({ reason: 'not-admin', yourUserId: callerId });
+      return;
+    }
+
+    // 우리 탭의 관리자 버튼 노출 판정용 — 무거운 조회 없이 "관리자 맞음"만 답한다
+    if (req.body?.probe) {
+      res.status(200).json({ admin: true });
       return;
     }
 
