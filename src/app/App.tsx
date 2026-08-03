@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import AdminScreen from '../features/admin/AdminScreen';
 import InstallGuide from '../features/install/InstallGuide';
 import LoginScreen from '../features/couple/LoginScreen';
 import OnboardingFlow from '../features/couple/OnboardingFlow';
@@ -155,6 +156,10 @@ export default function App() {
   // 홈 화면 설치 안내 — 스토어 없는 배포의 관문이라 공유 가능한 주소로 둔다
   if (window.location.pathname === '/install') {
     return <InstallGuide />;
+  }
+  // 관리자 현황 — 운영자 전용 (서버 함수가 ADMIN_USER_IDS로 판별, /install과 같은 관문 층)
+  if (window.location.pathname === '/admin') {
+    return <AdminScreen />;
   }
   if (window.location.pathname === KAKAO_APP_BRIDGE_PATH) {
     return <KakaoAppBridge />;
