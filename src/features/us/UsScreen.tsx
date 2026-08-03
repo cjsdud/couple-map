@@ -12,6 +12,7 @@ import {
   pinStyle,
   type CoupleTheme,
 } from '../../shared/lib/theme';
+import InvitePanel from '../couple/InvitePanel';
 import { useCoupleState, useUpdateNickname, type Couple } from '../couple/useCoupleState';
 import { useStreakDays } from '../today/useToday';
 import { categoryLabel, useCoupleMembers, useRecords } from '../map/useRecords';
@@ -48,6 +49,16 @@ export default function UsScreen() {
         <h1 className="text-2xl font-bold">우리</h1>
         <ActivityBell />
       </header>
+      {/* 아직 짝꿍이 안 들어온 커플(pending) — 연결될 때까지 초대 칸이 맨 위에 떠 있다 */}
+      {couple?.status === 'pending' && (
+        <section className="rounded-2xl rounded-tl-md border-2 border-pink/40 bg-white/70 p-4 shadow-sm">
+          <p className="text-base font-bold">💌 짝꿍을 초대해 주세요</p>
+          <p className="mb-3 mt-1 break-keep text-sm opacity-60">
+            아직 둘이 연결되지 않았어요. 지금 남기는 기록은 연결되면 짝꿍에게도 보여요.
+          </p>
+          <InvitePanel code={couple.invite_code} />
+        </section>
+      )}
       <DdayCard startedAt={startedAt} today={today} coupleId={couple?.id} mock={isMock} />
       <ExpenseMonthCard today={today} onOpen={() => setExpenseOpen(true)} />
       <ThemeCard couple={couple} userId={userId} mock={isMock} />

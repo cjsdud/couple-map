@@ -46,3 +46,26 @@ export function clearInviteCode() {
 export function inviteLink(code: string): string {
   return `${window.location.origin}/?invite=${code}`;
 }
+
+// ── 연결 대기 중 '먼저 둘러보기' (2026-08-03) ─────────────────────
+// 코드를 만든 사람이 짝꿍을 기다리는 동안 앱에 갇히지 않게 한다.
+// 이 플래그가 있으면 pending 커플도 셸에 들어가고, 우리 탭 맨 위에
+// 초대 칸(InvitePanel)이 연결될 때까지 떠 있다.
+
+const SOLO_KEY = 'dohwaji:soloEntered:';
+
+export function markSoloEntered(coupleId: string) {
+  try {
+    localStorage.setItem(SOLO_KEY + coupleId, '1');
+  } catch {
+    // 저장 불가 환경 — 이번 세션에서는 게이트가 다시 대기 화면을 보여줄 뿐
+  }
+}
+
+export function hasSoloEntered(coupleId: string): boolean {
+  try {
+    return localStorage.getItem(SOLO_KEY + coupleId) === '1';
+  } catch {
+    return false;
+  }
+}

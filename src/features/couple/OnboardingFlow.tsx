@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { signOut, suggestedNickname } from '../../shared/lib/auth';
-import { clearInviteCode, inviteLink, pendingInviteCode } from '../../shared/lib/invite';
+import { clearInviteCode, pendingInviteCode } from '../../shared/lib/invite';
+import InvitePanel from './InvitePanel';
 import {
   useCreateCouple,
   useCreateProfile,
@@ -16,6 +17,8 @@ interface Props {
   onRefetch: () => void;
   /** 사귄 날 입력을 건너뛸 때 (couples.started_at은 비워두고 진입) */
   onSkipStartedAt: (coupleId: string) => void;
+  /** 짝꿍을 기다리는 동안 먼저 둘러보기 — 우리 탭 초대 칸에서 계속 초대할 수 있다 */
+  onBrowseAlone: (coupleId: string) => void;
 }
 
 function friendlyError(error: unknown): string {
@@ -36,6 +39,7 @@ export default function OnboardingFlow({
   refetching,
   onRefetch,
   onSkipStartedAt,
+  onBrowseAlone,
 }: Props) {
   const { profile, couple } = state;
 
@@ -50,6 +54,7 @@ export default function OnboardingFlow({
         inviteCode={couple.invite_code}
         refetching={refetching}
         onRefetch={onRefetch}
+        onBrowseAlone={() => onBrowseAlone(couple.id)}
       />
     );
   } else {
@@ -216,66 +221,17 @@ function WaitingStep({
   inviteCode,
   refetching,
   onRefetch,
+  onBrowseAlone,
 }: {
   inviteCode: string;
   refetching: boolean;
   onRefetch: () => void;
+  onBrowseAlone: () => void;
 }) {
-  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
-  const link = inviteLink(inviteCode);
-
-  const copy = async (kind: 'code' | 'link') => {
-    try {
-      await navigator.clipboard.writeText(kind === 'code' ? inviteCode : link);
-      setCopied(kind);
-      setTimeout(() => setCopied(null), 2000);
-    } catch {
-      // 클립보드 미지원 WebView — 코드가 크게 보이므로 손으로 옮겨 적을 수 있다
-    }
-  };
-
-  // 초대장 보내기 — 공유 시트(카톡 등)로 링크 전달, 미지원이면 링크 복사
-  const sendInvite = () => {
-    if (typeof navigator.share === 'function') {
-      navigator
-        .share({
-          title: '우리의 도화지',
-          text: `우리 둘만의 지도를 같이 채워보자 🖍️ 초대 코드: ${inviteCode}`,
-          url: link,
-        })
-        .catch(() => {
-          // 공유 시트를 그냥 닫은 경우 — 무시
-        });
-    } else {
-      void copy('link');
-    }
-  };
-
   return (
     <div className="space-y-4 text-center">
       <h1 className="text-2xl font-bold">우리의 초대 코드</h1>
-      <div className="rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 py-8 shadow-sm">
-        <p className="select-all text-4xl font-bold tracking-[0.35em] text-pink">
-          {inviteCode}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={sendInvite}
-        className="w-full rounded-2xl rounded-tl-md bg-pink px-6 py-3.5 text-base font-bold text-white shadow-sm active:translate-y-px"
-      >
-        {copied === 'link' ? '초대 링크를 복사했어요!' : '💌 초대장 보내기'}
-      </button>
-      <button
-        type="button"
-        onClick={() => void copy('code')}
-        className="w-full rounded-2xl rounded-br-md border-2 border-ink/15 bg-white/70 px-6 py-3 text-base font-bold shadow-sm active:translate-y-px"
-      >
-        {copied === 'code' ? '복사했어요!' : '코드만 복사하기'}
-      </button>
-      <p className="break-keep text-sm opacity-60">
-        초대장을 받은 짝꿍은 코드가 자동으로 채워져요 — 코드를 직접 입력해도 돼요.
-      </p>
+      <InvitePanel code={inviteCode} />
       <button
         type="button"
         onClick={onRefetch}
@@ -284,13 +240,15 @@ function WaitingStep({
       >
         {refetching ? '확인하는 중…' : '연결됐는지 확인하기'}
       </button>
-      {/* 기다리는 동안 이탈 방지 — 예시 데이터로 앱을 미리 보여준다 */}
-      <a
-        href="/?mock=1"
-        className="block px-4 py-1 text-sm opacity-50 underline underline-offset-2"
+      {/* 기다리는 동안 갇히지 않게 — 혼자 먼저 쓰기 시작한다.
+          초대 칸은 우리 탭 맨 위에 연결될 때까지 계속 떠 있다 */}
+      <button
+        type="button"
+        onClick={onBrowseAlone}
+        className="w-full rounded-2xl rounded-br-md border-2 border-ink/15 bg-white/70 px-6 py-3 text-base font-bold shadow-sm active:translate-y-px"
       >
-        기다리는 동안 앱 미리 구경하기
-      </a>
+        먼저 둘러볼래요 — 초대는 나중에도 보낼 수 있어요
+      </button>
     </div>
   );
 }

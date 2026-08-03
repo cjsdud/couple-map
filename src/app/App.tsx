@@ -9,6 +9,7 @@ import {
   useCoupleState,
 } from '../features/couple/useCoupleState';
 import { completeKakaoLogin, KAKAO_CALLBACK_PATH, useSession } from '../shared/lib/auth';
+import { hasSoloEntered, markSoloEntered } from '../shared/lib/invite';
 import { KAKAO_APP_BRIDGE_PATH, NATIVE_KAKAO_SCHEME } from '../shared/lib/native';
 import { supabase } from '../shared/lib/supabase';
 import UpdatePrompt from '../shared/ui/UpdatePrompt';
@@ -92,6 +93,11 @@ function Gate() {
     markStartedAtSkipped(coupleId);
     bump((n) => n + 1);
   }, []);
+  // 연결 대기 중 '먼저 둘러보기' — 플래그를 남기고 셸로 들여보낸다
+  const browseAlone = useCallback((coupleId: string) => {
+    markSoloEntered(coupleId);
+    bump((n) => n + 1);
+  }, []);
 
   // ?mock=1: 로그인 없이 예시 데이터로 화면을 둘러보는 미리보기 모드
   if (new URLSearchParams(window.location.search).has('mock')) {
@@ -125,9 +131,12 @@ function Gate() {
   const state = coupleQuery.data ?? { profile: null, couple: null };
   const { couple } = state;
   const connected = couple?.status === 'active';
+  // 코드만 만들어 둔 상태(pending)라도 '먼저 둘러보기'를 눌렀다면 셸로 —
+  // 우리 탭 맨 위 초대 칸에서 언제든 초대장을 다시 보낼 수 있다
+  const browsingAlone = couple?.status === 'pending' && hasSoloEntered(couple.id);
   const needsStartedAt = connected && !couple.started_at && !hasSkippedStartedAt(couple.id);
 
-  if (!state.profile || !connected || needsStartedAt) {
+  if (!state.profile || (!connected && !browsingAlone) || needsStartedAt) {
     return (
       <OnboardingFlow
         userId={userId}
@@ -135,6 +144,7 @@ function Gate() {
         refetching={coupleQuery.isRefetching}
         onRefetch={() => void coupleQuery.refetch()}
         onSkipStartedAt={skipStartedAt}
+        onBrowseAlone={browseAlone}
       />
     );
   }
