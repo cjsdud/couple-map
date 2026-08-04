@@ -56,8 +56,16 @@ interface AdminDailyEntry {
   questionText: string | null;
   createdAt: string;
 }
+interface AdminGrowth {
+  signups: { today: number; week: number; prevWeek: number; total: number };
+  active: { today: number; week: number };
+  perUser: { records: number; daily: number };
+  engagedRate: number;
+  signupDaily: { date: string; events: number }[];
+}
 interface AdminStats {
   generatedAt: string;
+  growth: AdminGrowth;
   totals: {
     users: number;
     couples: number;
@@ -89,6 +97,16 @@ type Load =
 
 const MOCK_STATS: AdminStats = {
   generatedAt: new Date().toISOString(),
+  growth: {
+    signups: { today: 2, week: 9, prevWeek: 4, total: 24 },
+    active: { today: 5, week: 14 },
+    perUser: { records: 1.8, daily: 3.4 },
+    engagedRate: 0.71,
+    signupDaily: Array.from({ length: 14 }, (_, i) => ({
+      date: new Date(Date.now() - (13 - i) * 86400_000).toISOString().slice(0, 10),
+      events: [0, 0, 1, 0, 2, 1, 0, 1, 3, 0, 1, 2, 1, 2][i],
+    })),
+  },
   totals: {
     users: 4,
     couples: 2,
@@ -279,14 +297,19 @@ function Dashboard({ data }: { data: AdminStats }) {
 
   return (
     <div className="space-y-6">
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {tiles.map((tile) => (
-          <div key={tile.label} className="rounded-2xl rounded-tl-md border-2 border-ink/10 bg-white/70 p-3">
-            <p className="text-xs opacity-50">{tile.label}</p>
-            <p className="mt-0.5 text-2xl font-bold text-pink">{tile.value}</p>
-            {tile.sub && <p className="mt-0.5 text-[11px] opacity-45">{tile.sub}</p>}
-          </div>
-        ))}
+      <GrowthPanel g={data.growth} />
+
+      <section>
+        <h2 className="mb-2 text-sm font-bold opacity-70">누적</h2>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {tiles.map((tile) => (
+            <div key={tile.label} className="rounded-2xl rounded-tl-md border-2 border-ink/10 bg-white/70 p-3">
+              <p className="text-xs opacity-50">{tile.label}</p>
+              <p className="mt-0.5 text-2xl font-bold text-pink">{tile.value}</p>
+              {tile.sub && <p className="mt-0.5 text-[11px] opacity-45">{tile.sub}</p>}
+            </div>
+          ))}
+        </div>
       </section>
 
       <DailyChart daily={data.daily} />
@@ -415,18 +438,120 @@ function TodayFeed({ entries }: { entries: AdminDailyEntry[] }) {
   );
 }
 
-/** 최근 14일 일별 활동 (기록 생성 + 오늘 참여) — CSS 막대 */
-function DailyChart({ daily }: { daily: { date: string; events: number }[] }) {
-  const max = Math.max(1, ...daily.map((d) => d.events));
+/**
+ * 성장·이용 요약 — "얼마나 늘었고 얼마나 쓰는지"를 맨 위에서 한 번에.
+ * 지난주 대비 증감을 같이 보여줘야 숫자 하나가 좋은 건지 나쁜 건지 판단이 된다.
+ */
+function GrowthPanel({ g }: { g: AdminGrowth }) {
+  const diff = g.signups.week - g.signups.prevWeek;
+  const trend =
+    g.signups.prevWeek === 0
+      ? g.signups.week > 0
+        ? '첫 주'
+        : '아직 없음'
+      : `지난주 ${g.signups.prevWeek}명 대비 ${diff >= 0 ? '+' : ''}${diff}명`;
+
+  const cards: { label: string; value: string; sub: string; strong?: boolean }[] = [
+    {
+      label: '이번 주 신규 가입',
+      value: `${g.signups.week}명`,
+      sub: trend,
+      strong: true,
+    },
+    {
+      label: '오늘 가입',
+      value: `${g.signups.today}명`,
+      sub: `전체 ${g.signups.total}명`,
+    },
+    {
+      label: '이번 주 활동한 사람',
+      value: `${g.active.week}명`,
+      sub: g.signups.total
+        ? `가입자의 ${Math.round((g.active.week / g.signups.total) * 100)}%`
+        : '—',
+      strong: true,
+    },
+    {
+      label: '오늘 활동한 사람',
+      value: `${g.active.today}명`,
+      sub: '기록·오늘을 남긴 사람',
+    },
+    {
+      label: '1인당 데이트 기록',
+      value: g.perUser.records.toFixed(1),
+      sub: '가입자 전체 평균',
+    },
+    {
+      label: '1인당 오늘 참여',
+      value: g.perUser.daily.toFixed(1),
+      sub: `실제로 써 본 사람 ${Math.round(g.engagedRate * 100)}%`,
+    },
+  ];
+
   return (
     <section>
-      <h2 className="mb-2 text-sm font-bold opacity-70">최근 14일 활동</h2>
+      <h2 className="mb-2 text-sm font-bold opacity-70">성장 · 이용</h2>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {cards.map((c) => (
+          <div
+            key={c.label}
+            className={`rounded-2xl rounded-tl-md border-2 p-3 ${
+              c.strong ? 'border-pink/40 bg-pink/5' : 'border-ink/10 bg-white/70'
+            }`}
+          >
+            <p className="text-xs opacity-50">{c.label}</p>
+            <p className="mt-0.5 text-2xl font-bold text-pink">{c.value}</p>
+            <p className="mt-0.5 break-keep text-[11px] opacity-45">{c.sub}</p>
+          </div>
+        ))}
+      </div>
+      <BarChart
+        title="최근 14일 신규 가입"
+        data={g.signupDaily}
+        unit="명"
+        className="mt-2"
+        color="bg-green/70"
+      />
+    </section>
+  );
+}
+
+/** 최근 14일 일별 활동 (기록 생성 + 오늘 참여) */
+function DailyChart({ daily }: { daily: { date: string; events: number }[] }) {
+  return <BarChart title="최근 14일 활동 (기록·오늘)" data={daily} unit="건" />;
+}
+
+/** 날짜별 막대 — CSS만으로 (차트 라이브러리 추가 없이) */
+function BarChart({
+  title,
+  data,
+  unit,
+  color = 'bg-pink/70',
+  className = '',
+}: {
+  title: string;
+  data: { date: string; events: number }[];
+  unit: string;
+  color?: string;
+  className?: string;
+}) {
+  const max = Math.max(1, ...data.map((d) => d.events));
+  const total = data.reduce((s, d) => s + d.events, 0);
+  return (
+    <section className={className}>
+      <p className="mb-1.5 text-xs font-bold opacity-60">
+        {title} <span className="font-normal opacity-60">— 합계 {total}{unit}</span>
+      </p>
       <div className="flex h-24 items-end gap-1 rounded-2xl rounded-tl-md border-2 border-ink/10 bg-white/70 p-3">
-        {daily.map((d) => (
-          <div key={d.date} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${d.date} · ${d.events}건`}>
+        {data.map((d) => (
+          <div
+            key={d.date}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1"
+            title={`${d.date} · ${d.events}${unit}`}
+          >
             <span className="text-[10px] tabular-nums opacity-50">{d.events > 0 ? d.events : ''}</span>
             <div
-              className="w-full rounded-t bg-pink/70"
+              className={`w-full rounded-t ${color}`}
               style={{ height: `${Math.max(d.events > 0 ? 8 : 2, (d.events / max) * 56)}px` }}
             />
             <span className="text-[9px] opacity-40">{d.date.slice(8)}</span>

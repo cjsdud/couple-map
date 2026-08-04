@@ -209,6 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     // ── 최근 14일 일별 활동 (기록 생성 + 오늘 참여 + 보관함 이벤트) ──
+    const DAY = 86400_000;
     const dayKey = (iso: string) =>
       new Date(new Date(iso).getTime() + 9 * 3600_000).toISOString().slice(0, 10); // KST
     const byDay = new Map<string, number>();
@@ -218,9 +219,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const today = new Date(Date.now() + 9 * 3600_000);
     const daily: { date: string; events: number }[] = [];
     for (let i = 13; i >= 0; i--) {
-      const d = new Date(today.getTime() - i * 86400_000).toISOString().slice(0, 10);
+      const d = new Date(today.getTime() - i * DAY).toISOString().slice(0, 10);
       daily.push({ date: d, events: byDay.get(d) ?? 0 });
     }
+
+    // ── 성장·이용 요약 — 신규 가입 추이와 "얼마나 쓰는지"를 한눈에 ──
+    const now = Date.now();
+    const inLast = (iso: string, days: number) => now - new Date(iso).getTime() < days * DAY;
+    const todayKey = dayKey(new Date(now).toISOString());
+
+    const signupByDay = new Map<string, number>();
+    for (const p of profiles) {
+      const k = dayKey(p.created_at);
+      signupByDay.set(k, (signupByDay.get(k) ?? 0) + 1);
+    }
+    const signupDaily: { date: string; events: number }[] = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * DAY).toISOString().slice(0, 10);
+      signupDaily.push({ date: d, events: signupByDay.get(d) ?? 0 });
+    }
+
+    // 활성 사용자 — 그 기간에 기록·오늘·보관함 이벤트를 하나라도 남긴 고유 사용자
+    const activeWithin = (days: number): number => {
+      const set = new Set<string>();
+      for (const r of records) if (r.created_by && inLast(r.created_at, days)) set.add(r.created_by);
+      for (const d of dailyEntries) if (inLast(d.created_at, days)) set.add(d.user_id);
+      for (const a of activity) if (inLast(a.created_at, days)) set.add(a.actor_id);
+      return set.size;
+    };
+
+    const growth = {
+      signups: {
+        today: profiles.filter((p) => dayKey(p.created_at) === todayKey).length,
+        week: profiles.filter((p) => inLast(p.created_at, 7)).length,
+        prevWeek: profiles.filter((p) => inLast(p.created_at, 14) && !inLast(p.created_at, 7)).length,
+        total: profiles.length,
+      },
+      active: { today: activeWithin(1), week: activeWithin(7) },
+      perUser: {
+        records: profiles.length ? records.length / profiles.length : 0,
+        daily: profiles.length ? dailyEntries.length / profiles.length : 0,
+      },
+      // 가입만 하고 아무것도 안 남긴 사람을 뺀, "실제로 써 본" 비율
+      engagedRate: profiles.length
+        ? profiles.filter((p) => {
+            const uid = p.user_id;
+            return (
+              records.some((r) => r.created_by === uid) ||
+              dailyEntries.some((d) => d.user_id === uid) ||
+              activity.some((a) => a.actor_id === uid)
+            );
+          }).length / profiles.length
+        : 0,
+      signupDaily,
+    };
 
     // ── 내용 목록 — 기록(스팟·한마디·메모·지출 합계)과 오늘(기분·일기·답변) ──
     const spotsByRecord = new Map<string, { name: string; note: string | null }[]>();
@@ -269,6 +321,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(200).json({
       generatedAt: new Date().toISOString(),
+      growth,
       totals: {
         users: profiles.length,
         couples: couples.length,
