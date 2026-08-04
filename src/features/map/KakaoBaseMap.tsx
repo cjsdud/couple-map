@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { loadKakaoMaps } from '../../shared/lib/kakaoMap';
+import { pinMarkup } from '../../shared/lib/pinMarkup';
+import { pinStyle } from '../../shared/lib/theme';
+import { useCoupleTheme } from '../couple/useCoupleState';
 import { useConquest } from './useConquest';
 import { useRecords } from './useRecords';
 
@@ -27,28 +30,25 @@ const CONQUEST_STROKE = '#6f9450';
  * 루트를 0×0으로 두면 앵커 보정이 항상 0이라 콘텐츠가 어떻게 바뀌든 좌표가 흔들리지 않는다.
  * 핀은 transform으로 끝점이 좌표를 가리키게, 이름은 그 아래에 절대배치로 띄운다.
  */
-function createPin(name: string, color: string, onClick: () => void) {
+function createPin(name: string, color: string, style: string, onClick: () => void) {
   const root = document.createElement('div');
   root.style.cssText = 'position:relative;width:0;height:0';
 
+  // 커플 테마의 핀 모양 그대로 (도화지 지도와 동일) — 콕 핀은 꼭짓점, 나머지는 중심이 좌표에
+  const pin = pinMarkup(style, color);
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.setAttribute('aria-label', `${name} 기록 보기`);
   btn.style.cssText =
-    'position:absolute;left:0;top:0;transform:translate(-50%,-100%);background:none;border:none;' +
-    'padding:0;line-height:0;cursor:pointer;filter:drop-shadow(0 2px 4px rgba(59,55,51,.35))';
-  // 물방울 핀 — 뾰족한 끝(12,31)이 viewBox 아래 가운데라 translate(-50%,-100%)면 좌표에 정확히 닿는다
-  btn.innerHTML = `
-    <svg width="24" height="32" viewBox="0 0 24 32" aria-hidden="true">
-      <path d="M12 31C5 22 1.5 17 1.5 11.5a10.5 10.5 0 1 1 21 0C22.5 17 19 22 12 31Z"
-            fill="${color}" stroke="#fdfcf7" stroke-width="2" stroke-linejoin="round"/>
-      <circle cx="12" cy="11.5" r="4" fill="#fdfcf7"/>
-    </svg>`;
+    `position:absolute;left:0;top:0;transform:translate(-50%,${pin.centered ? '-50%' : '-100%'});` +
+    'background:none;border:none;padding:0;line-height:0;cursor:pointer;' +
+    'filter:drop-shadow(0 2px 4px rgba(59,55,51,.35))';
+  btn.innerHTML = pin.html;
   btn.addEventListener('click', onClick);
 
   const label = document.createElement('span');
   label.style.cssText =
-    'position:absolute;left:0;top:4px;transform:translateX(-50%);font-size:11px;font-weight:700;' +
+    `position:absolute;left:0;top:${pin.labelOffset}px;transform:translateX(-50%);font-size:11px;font-weight:700;` +
     'color:#3b3733;text-shadow:0 0 3px #fdfcf7,0 0 3px #fdfcf7;white-space:nowrap;pointer-events:none';
   // textContent — 장소 이름에 <, & 가 있어도 깨지지 않게 (innerHTML로 넣던 것을 바꿈)
   label.textContent = name;
@@ -74,6 +74,8 @@ export default function KakaoBaseMap({
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const { visitCounts } = useConquest();
   const { data: records = [] } = useRecords();
+  // 커플 테마의 핀 모양 — 도화지 지도(ConquestMap)와 같은 걸 쓴다 (바꾸면 핀을 다시 그린다)
+  const pin = pinStyle(useCoupleTheme());
   const { data: geo } = useQuery({
     queryKey: ['sigungu-geo-raw'],
     queryFn: async (): Promise<{ features: SigunguGeoFeature[] }> => {
@@ -171,7 +173,7 @@ export default function KakaoBaseMap({
         );
       }
       for (const s of spots) {
-        const { root, label } = createPin(s.name, color, () => onSelectRecord?.(rec.id));
+        const { root, label } = createPin(s.name, color, pin, () => onSelectRecord?.(rec.id));
         labels.push(label);
         overlays.push(
           new window.kakao.maps.CustomOverlay({
@@ -193,7 +195,7 @@ export default function KakaoBaseMap({
       window.kakao.maps.event.removeListener(map, 'zoom_changed', syncLabels);
       overlays.forEach((o) => o.setMap(null));
     };
-  }, [status, records, onSelectRecord]);
+  }, [status, records, onSelectRecord, pin]);
 
   if (status === 'error') {
     return (

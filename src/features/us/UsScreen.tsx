@@ -248,6 +248,7 @@ function DdayCard({
 function ReferralCard({ coupleId, mock }: { coupleId: string | undefined; mock: boolean }) {
   const count = useReferralCount(!mock && Boolean(coupleId)).data ?? (mock ? 1 : 0);
   const [copied, setCopied] = useState(false);
+  const [sentHint, setSentHint] = useState(false);
   // 미리보기(mock)에서도 카드 모양은 보여준다 — 링크만 가짜
   const link = coupleId ? referralLink(coupleId) : mock ? referralLink('00000000-0000-0000-0000-000000000000') : null;
   if (!link) return null;
@@ -257,23 +258,29 @@ function ReferralCard({ coupleId, mock }: { coupleId: string | undefined; mock: 
       await navigator.clipboard.writeText(link);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      return true;
     } catch {
-      // 클립보드 미지원 — 공유 버튼이 남아 있다
+      return false;
     }
   };
-  const share = () => {
+  // 공유 시트가 없거나 거부되는 환경(PC·일부 인앱)에서는 복사로 폴백하고 **말해준다** —
+  // 예전엔 조용히 삼켜서 버튼이 죽은 것처럼 보였다 (사용자 제보 2026-08-03)
+  const share = async () => {
     if (typeof navigator.share === 'function') {
-      navigator
-        .share({
+      try {
+        await navigator.share({
           title: '우리의 도화지',
           text: '우리가 쓰는 커플 기록장이야 — 데이트마다 지도가 칠해져 🖍️',
           url: link,
-        })
-        .catch(() => {
-          // 공유 시트를 그냥 닫은 경우 — 무시
         });
-    } else {
-      void copy();
+        return;
+      } catch (e) {
+        if ((e as DOMException)?.name === 'AbortError') return; // 시트를 그냥 닫음
+      }
+    }
+    if (await copy()) {
+      setSentHint(true);
+      setTimeout(() => setSentHint(false), 2500);
     }
   };
 
@@ -295,10 +302,10 @@ function ReferralCard({ coupleId, mock }: { coupleId: string | undefined; mock: 
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={share}
+          onClick={() => void share()}
           className="flex-1 rounded-2xl rounded-tl-md bg-pink py-2.5 text-sm font-bold text-white active:translate-y-px"
         >
-          💌 소개장 보내기
+          {sentHint ? '링크 복사됨 — 붙여넣어 보내요!' : '💌 소개장 보내기'}
         </button>
         <button
           type="button"

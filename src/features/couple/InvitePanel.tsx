@@ -12,30 +12,37 @@ export default function InvitePanel({ code }: { code: string }) {
   const link = inviteLink(code);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
 
+  const [sentHint, setSentHint] = useState(false);
   const copy = async (kind: 'code' | 'link') => {
     try {
       await navigator.clipboard.writeText(kind === 'code' ? code : link);
       setCopied(kind);
       setTimeout(() => setCopied(null), 2000);
+      return true;
     } catch {
       // 클립보드 미지원 WebView — 칸이 보이므로 길게 눌러 직접 복사할 수 있다
+      return false;
     }
   };
 
-  // 초대장 보내기 — 공유 시트(카톡 등)로 링크 전달, 미지원이면 링크 복사
-  const send = () => {
+  // 초대장 보내기 — 공유 시트(카톡 등)로 링크 전달. 시트가 없거나 거부되는 환경(PC·일부
+  // 인앱)에서는 복사로 폴백하고 버튼 글씨로 말해준다 — 조용히 삼키면 죽은 버튼처럼 보인다.
+  const send = async () => {
     if (typeof navigator.share === 'function') {
-      navigator
-        .share({
+      try {
+        await navigator.share({
           title: '우리의 도화지',
           text: `우리 둘만의 지도를 같이 채워보자 🖍️ 초대 코드: ${code}`,
           url: link,
-        })
-        .catch(() => {
-          // 공유 시트를 그냥 닫은 경우 — 무시
         });
-    } else {
-      void copy('link');
+        return;
+      } catch (e) {
+        if ((e as DOMException)?.name === 'AbortError') return; // 시트를 그냥 닫음
+      }
+    }
+    if (await copy('link')) {
+      setSentHint(true);
+      setTimeout(() => setSentHint(false), 2500);
     }
   };
 
@@ -73,10 +80,10 @@ export default function InvitePanel({ code }: { code: string }) {
 
       <button
         type="button"
-        onClick={send}
+        onClick={() => void send()}
         className="w-full rounded-2xl rounded-tl-md bg-pink px-6 py-3.5 text-base font-bold text-white shadow-sm active:translate-y-px"
       >
-        💌 초대장 보내기
+        {sentHint ? '링크 복사됨 — 붙여넣어 보내 주세요!' : '💌 초대장 보내기'}
       </button>
       <p className="break-keep text-center text-xs opacity-50">
         링크를 받은 짝꿍은 코드가 자동으로 채워져요 — 코드를 직접 입력해도 돼요.
