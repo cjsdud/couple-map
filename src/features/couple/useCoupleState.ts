@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { clearRefCouple, pendingRefCouple } from '../../shared/lib/invite';
 import { supabase } from '../../shared/lib/supabase';
 import { useSession } from '../../shared/lib/auth';
 import type { CoupleTheme } from '../../shared/lib/theme';
@@ -109,6 +110,27 @@ export function useUpdateNickname(userId: string | undefined) {
 }
 
 /** RPC create_couple() — pending 커플 생성 후 6자리 초대 코드를 돌려받는다. */
+/**
+ * 소개 링크 귀속 (0018) — 커플이 생긴 직후 1회 시도.
+ * 실패는 조용히 넘어간다 (0018 미적용 프로젝트 포함 — 귀속은 부가 기능).
+ */
+async function attributeReferral(coupleId: string) {
+  const ref = pendingRefCouple();
+  if (!ref || !supabase) return;
+  if (ref !== coupleId) {
+    try {
+      await supabase
+        .from('couples')
+        .update({ referred_by: ref })
+        .eq('id', coupleId)
+        .is('referred_by', null);
+    } catch {
+      // 무시 — 소개 수 세기만 못할 뿐
+    }
+  }
+  clearRefCouple();
+}
+
 export function useCreateCouple(userId: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -122,8 +144,10 @@ export function useCreateCouple(userId: string) {
       if (!row) throw new Error('초대 코드를 만들지 못했어요');
       return row;
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: coupleStateKey(userId) }),
+    onSuccess: (row) => {
+      void attributeReferral(row.couple_id);
+      void queryClient.invalidateQueries({ queryKey: coupleStateKey(userId) });
+    },
   });
 }
 
@@ -135,9 +159,33 @@ export function useJoinCouple(userId: string) {
       const sb = requireSupabase();
       const { error } = await sb.rpc('join_couple', { code: code.trim() });
       if (error) throw error;
+      // 합류한 커플 id — 소개 귀속용 (만든 쪽이 이미 적었으면 is null 필터가 막는다)
+      const { data } = await sb
+        .from('profiles')
+        .select('couple_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+      return (data?.couple_id as string | null) ?? null;
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: coupleStateKey(userId) }),
+    onSuccess: (coupleId) => {
+      if (coupleId) void attributeReferral(coupleId);
+      void queryClient.invalidateQueries({ queryKey: coupleStateKey(userId) });
+    },
+  });
+}
+
+/** 우리 소개로 시작한 커플 수 (0018 my_referral_count) — 미적용·목이면 0 */
+export function useReferralCount(enabled: boolean) {
+  return useQuery({
+    queryKey: ['referral-count'],
+    enabled: enabled && Boolean(supabase),
+    staleTime: 60_000,
+    queryFn: async (): Promise<number> => {
+      if (!supabase) return 0;
+      const { data, error } = await supabase.rpc('my_referral_count');
+      if (error) return 0;
+      return (data as number) ?? 0;
+    },
   });
 }
 

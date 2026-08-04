@@ -14,7 +14,9 @@ import {
   type CoupleTheme,
 } from '../../shared/lib/theme';
 import InvitePanel from '../couple/InvitePanel';
-import { useCoupleState, useUpdateNickname, type Couple } from '../couple/useCoupleState';
+import { referralLink } from '../../shared/lib/invite';
+import { PinShape } from '../map/ConquestMap';
+import { useCoupleState, useReferralCount, useUpdateNickname, type Couple } from '../couple/useCoupleState';
 import { useStreakDays } from '../today/useToday';
 import { categoryLabel, useCoupleMembers, useRecords } from '../map/useRecords';
 import RecordDetailSheet from '../map/RecordDetailSheet';
@@ -64,6 +66,7 @@ export default function UsScreen() {
       <DdayCard startedAt={startedAt} today={today} coupleId={couple?.id} mock={isMock} />
       <ExpenseMonthCard today={today} onOpen={() => setExpenseOpen(true)} />
       <ThemeCard couple={couple} userId={userId} mock={isMock} />
+      <ReferralCard coupleId={couple?.id} mock={isMock} />
       <SettingsCard
         coupleId={couple?.id}
         userId={userId}
@@ -238,7 +241,121 @@ function DdayCard({
 }
 
 // ── 도화지 꾸미기: 핀 모양·배경 톤 (A안 — 스트릭으로 해금, 명세 §3.2 보상) ──
-const PIN_SYMBOL: Record<string, string> = { dot: '📍', heart: '♥', star: '★', tape: '▬' };
+/**
+ * 친구 커플에게 소개하기 (growth-monetization-v0.1 §1) — 소개 링크 공유 + 성과 표시.
+ * 소개로 시작한 커플이 1쌍 생기면 '단짝 핀'이 열린다. 비교·순위는 만들지 않는다 (명세 §3.3).
+ */
+function ReferralCard({ coupleId, mock }: { coupleId: string | undefined; mock: boolean }) {
+  const count = useReferralCount(!mock && Boolean(coupleId)).data ?? (mock ? 1 : 0);
+  const [copied, setCopied] = useState(false);
+  // 미리보기(mock)에서도 카드 모양은 보여준다 — 링크만 가짜
+  const link = coupleId ? referralLink(coupleId) : mock ? referralLink('00000000-0000-0000-0000-000000000000') : null;
+  if (!link) return null;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 클립보드 미지원 — 공유 버튼이 남아 있다
+    }
+  };
+  const share = () => {
+    if (typeof navigator.share === 'function') {
+      navigator
+        .share({
+          title: '우리의 도화지',
+          text: '우리가 쓰는 커플 기록장이야 — 데이트마다 지도가 칠해져 🖍️',
+          url: link,
+        })
+        .catch(() => {
+          // 공유 시트를 그냥 닫은 경우 — 무시
+        });
+    } else {
+      void copy();
+    }
+  };
+
+  return (
+    <section className="space-y-2.5 rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/60 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">친구 커플에게 소개하기</h2>
+        {count > 0 && (
+          <span className="shrink-0 rounded-full bg-yellow/40 px-2.5 py-0.5 text-xs font-bold">
+            💛 {count}쌍 시작!
+          </span>
+        )}
+      </div>
+      <p className="break-keep text-xs leading-relaxed opacity-60">
+        {count > 0
+          ? '우리 소개로 시작한 커플이 있어요 — 도화지 꾸미기에서 하트 둘이 겹친 단짝 핀을 쓸 수 있어요.'
+          : '소개한 친구 커플이 도화지를 시작하면, 하트 둘이 겹친 단짝 핀이 열려요.'}
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={share}
+          className="flex-1 rounded-2xl rounded-tl-md bg-pink py-2.5 text-sm font-bold text-white active:translate-y-px"
+        >
+          💌 소개장 보내기
+        </button>
+        <button
+          type="button"
+          onClick={() => void copy()}
+          className="flex-1 rounded-2xl rounded-br-md border-2 border-ink/15 bg-white/70 py-2.5 text-sm font-bold active:translate-y-px"
+        >
+          {copied ? '복사됨 ✓' : '링크 복사'}
+        </button>
+      </div>
+      {mock && <p className="text-xs opacity-50">미리보기예요 — 실제 링크는 연결 후에 만들어져요</p>}
+    </section>
+  );
+}
+
+/** 핀 선택 칩 속 실제 모양 — 지도에 찍히는 PinShape 그대로 (글자 기호보다 정확하다) */
+function PinChip({ style, active }: { style: string; active: boolean }) {
+  return (
+    <svg viewBox="-11 -15 22 27" className="h-6 w-6 shrink-0" aria-hidden>
+      <PinShape style={style} x={0} y={4} r={4.2} color={active ? '#ffffff' : '#e8637c'} sf={0.9} />
+    </svg>
+  );
+}
+
+/** 고른 핀·종이가 지도에서 어떻게 보일지 — 작은 도화지 조각 미리보기 */
+function ThemePreview({ pin, paper }: { pin: string; paper: string }) {
+  const color = PAPER_TONES.find((t) => t.key === paper)?.color ?? '#fdfcf7';
+  return (
+    <svg
+      viewBox="0 0 200 84"
+      className="w-full rounded-xl rounded-tl-sm border border-ink/10"
+      style={{ backgroundColor: color }}
+      aria-label="꾸미기 미리보기"
+    >
+      {/* 칠해진 동네 얼룩 + 데이트 코스 점선 — 지도 느낌만 살짝 */}
+      <path
+        d="M 18 52 C 26 30 58 24 74 36 C 90 48 78 66 56 70 C 36 74 12 68 18 52 Z"
+        fill="#8cab68"
+        opacity="0.24"
+      />
+      <path
+        d="M 120 30 C 138 18 168 22 176 38 C 184 54 166 66 146 62 C 128 58 108 44 120 30 Z"
+        fill="#8cab68"
+        opacity="0.15"
+      />
+      <path
+        d="M 52 50 C 80 30 120 58 150 40"
+        fill="none"
+        stroke="#e8637c"
+        strokeWidth="2"
+        strokeDasharray="5 5"
+        opacity="0.55"
+      />
+      <PinShape style={pin} x={52} y={50} r={7} color="#e8637c" sf={1.4} />
+      <PinShape style={pin} x={150} y={40} r={7} color="#e8637c" sf={1.4} />
+    </svg>
+  );
+}
 
 function ThemeCard({
   couple,
@@ -264,6 +381,9 @@ function ThemeCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streak, theme.maxStreak, couple?.id, mock]);
 
+  // 단짝 핀(소개 보상) 해금 판정용 — 베타에는 어차피 전부 열려 있지만 수치는 미리 흐르게 둔다
+  const referralCount = useReferralCount(!mock && Boolean(couple?.id)).data ?? 0;
+
   const disabled = !supabase || !couple?.id || mock || update.isPending;
   const pick = (patch: Partial<CoupleTheme>) => update.mutate({ theme: { ...theme, ...patch } });
   const currentPin = pinStyle(theme);
@@ -276,11 +396,13 @@ function ThemeCard({
         <span className="text-xs opacity-50">둘이 함께 쓰는 테마예요</span>
       </div>
 
+      <ThemePreview pin={currentPin} paper={currentPaper} />
+
       <div className="space-y-1.5">
         <span className="text-sm">핀 모양</span>
         <div className="flex flex-wrap gap-1.5">
           {PIN_STYLES.map((p) => {
-            const unlocked = isUnlocked(p, theme, streak);
+            const unlocked = isUnlocked(p, theme, streak, referralCount);
             const selected = currentPin === p.key;
             return (
               <button
@@ -288,13 +410,17 @@ function ThemeCard({
                 type="button"
                 disabled={disabled || !unlocked}
                 onClick={() => pick({ pin: p.key })}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm ${
+                className={`flex items-center gap-1 rounded-full py-1 pl-1.5 pr-3 text-sm ${
                   selected ? 'bg-pink font-bold text-white' : 'border border-ink/15 bg-white/60'
                 } ${!unlocked ? 'opacity-45' : ''}`}
               >
-                <span aria-hidden className={selected ? '' : 'text-pink'}>{PIN_SYMBOL[p.key]}</span>
+                <PinChip style={p.key} active={selected} />
                 {p.label}
-                {!unlocked && <span className="text-[11px] opacity-70">🔒 {p.unlock}일</span>}
+                {!unlocked && (
+                  <span className="text-[11px] opacity-70">
+                    {p.kind === 'referral' ? '🔒 친구 커플' : `🔒 ${p.unlock}일`}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -305,7 +431,7 @@ function ThemeCard({
         <span className="text-sm">도화지 톤</span>
         <div className="flex flex-wrap gap-2">
           {PAPER_TONES.map((t) => {
-            const unlocked = isUnlocked(t, theme, streak);
+            const unlocked = isUnlocked(t, theme, streak, referralCount);
             const selected = currentPaper === t.key;
             return (
               <button
@@ -334,7 +460,7 @@ function ThemeCard({
       <p className="break-keep text-xs opacity-50">
         {BETA_ALL_UNLOCKED
           ? '베타 기간이라 모든 꾸미기가 열려 있어요'
-          : `둘 다 채운 날이 이어지면 새 꾸미기가 열려요 — 지금까지 최고 ${Math.max(theme.maxStreak ?? 0, streak)}일`}
+          : `둘 다 채운 날이 이어지면 새 꾸미기가 열려요 — 지금까지 최고 ${Math.max(theme.maxStreak ?? 0, streak)}일. 단짝 핀은 친구 커플을 소개하면 열려요.`}
       </p>
       {mock && <p className="text-xs opacity-50">미리보기예요 — 저장은 짝꿍과 연결한 뒤에 할 수 있어요</p>}
     </section>

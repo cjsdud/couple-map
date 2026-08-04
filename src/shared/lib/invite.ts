@@ -47,6 +47,54 @@ export function inviteLink(code: string): string {
   return `${window.location.origin}/?invite=${code}`;
 }
 
+// ── 친구 커플 소개 (growth-monetization-v0.1 §1) ──────────────────
+// 소개 링크(/install?ref=<couple_id>)로 들어온 사람이 나중에 커플이 되면,
+// 그 커플 행에 소개해 준 커플 id를 남긴다 (0018). 가입까지 며칠 걸릴 수 있어
+// sessionStorage가 아니라 localStorage에 잡아 둔다.
+
+const REF_KEY = 'dohwaji:refCouple';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** 부팅 시 1회 — URL의 ref 파라미터를 잡아 두고 URL에서는 지운다 */
+export function captureRefFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get('ref');
+  if (!raw) return;
+  if (UUID_RE.test(raw)) {
+    try {
+      localStorage.setItem(REF_KEY, raw.toLowerCase());
+    } catch {
+      // 저장 불가 환경 — 귀속만 포기 (앱 사용에는 지장 없음)
+    }
+  }
+  params.delete('ref');
+  const q = params.toString();
+  window.history.replaceState(null, '', window.location.pathname + (q ? `?${q}` : ''));
+}
+
+/** 잡아 둔 소개 커플 id (없으면 null) */
+export function pendingRefCouple(): string | null {
+  try {
+    return localStorage.getItem(REF_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** 귀속 시도 후 소비 */
+export function clearRefCouple() {
+  try {
+    localStorage.removeItem(REF_KEY);
+  } catch {
+    // 무시
+  }
+}
+
+/** 공유용 소개 링크 — 소개 페이지로 보낸다 (첫인상은 /install이 낫다) */
+export function referralLink(coupleId: string): string {
+  return `${window.location.origin}/install?ref=${coupleId}`;
+}
+
 // ── 연결 대기 중 '먼저 둘러보기' (2026-08-03) ─────────────────────
 // 코드를 만든 사람이 짝꿍을 기다리는 동안 앱에 갇히지 않게 한다.
 // 이 플래그가 있으면 pending 커플도 셸에 들어가고, 우리 탭 맨 위에

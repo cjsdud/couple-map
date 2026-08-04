@@ -464,19 +464,49 @@ export default function ConquestMap({
 }
 
 /** 기록 스팟 점 + 같은 기록 스팟의 점선 연결 (명세 §3.1 데이트 기록 핀) — 점 탭 시 기록 상세 */
-/** 핀 모양 렌더 (도화지 꾸미기 A안) — 그림자·흰 테두리·하이라이트로 입체감, 화면상 크기 일정 */
-function PinShape({ style, x, y, r, color, sf }: { style: string; x: number; y: number; r: number; color: string; sf: number }) {
+/** 하트 경로 — heart·buddy 핀이 같이 쓴다 (중심 hx,hy · 반경 hr) */
+function heartPath(hx: number, hy: number, hr: number): string {
+  return `M ${hx} ${hy + hr * 1.25} C ${hx - hr * 2.1} ${hy - hr * 0.7}, ${hx - hr * 0.7} ${hy - hr * 1.7}, ${hx} ${hy - hr * 0.4} C ${hx + hr * 0.7} ${hy - hr * 1.7}, ${hx + hr * 2.1} ${hy - hr * 0.7}, ${hx} ${hy + hr * 1.25} Z`;
+}
+
+/** 핀 모양 렌더 (도화지 꾸미기 A안) — 그림자·흰 테두리·하이라이트로 입체감, 화면상 크기 일정.
+ *  꾸미기 카드 미리보기(UsScreen)도 이 컴포넌트를 그대로 그린다 — 지도와 똑같이 보여야 한다. */
+export function PinShape({ style, x, y, r, color, sf }: { style: string; x: number; y: number; r: number; color: string; sf: number }) {
   const stroke = { stroke: '#fdfcf7', strokeWidth: 2 * sf, strokeLinejoin: 'round' as const };
   const shadow = (cy: number) => (
     <ellipse cx={x} cy={cy} rx={r * 1.15} ry={r * 0.38} fill="#3b3733" opacity={0.16} />
   );
   if (style === 'heart') {
-    const d = `M ${x} ${y + r * 1.25} C ${x - r * 2.1} ${y - r * 0.7}, ${x - r * 0.7} ${y - r * 1.7}, ${x} ${y - r * 0.4} C ${x + r * 0.7} ${y - r * 1.7}, ${x + r * 2.1} ${y - r * 0.7}, ${x} ${y + r * 1.25} Z`;
     return (
       <>
         {shadow(y + r * 1.55)}
-        <path d={d} fill={color} {...stroke} />
+        <path d={heartPath(x, y, r)} fill={color} {...stroke} />
         <circle cx={x - r * 0.8} cy={y - r * 0.75} r={r * 0.34} fill="#fdfcf7" opacity={0.85} />
+      </>
+    );
+  }
+  if (style === 'buddy') {
+    // 단짝 핀 — 하트 둘이 겹쳐 있다 (친구 커플 소개 보상, growth-monetization-v0.1)
+    return (
+      <>
+        {shadow(y + r * 1.5)}
+        <path d={heartPath(x - r * 0.5, y + r * 0.15, r * 0.78)} fill={color} {...stroke} opacity={0.94} />
+        <path d={heartPath(x + r * 0.62, y - r * 0.5, r * 0.6)} fill={color} {...stroke} />
+        <circle cx={x + r * 0.28} cy={y - r * 0.95} r={r * 0.22} fill="#fdfcf7" opacity={0.85} />
+      </>
+    );
+  }
+  if (style === 'ribbon') {
+    // 리본 핀 — 양 날개 + 가운데 매듭
+    const wing = (dir: 1 | -1) =>
+      `M ${x} ${y} L ${x + dir * r * 1.7} ${y - r * 1.05} C ${x + dir * r * 2.05} ${y - r * 0.35} ${x + dir * r * 2.05} ${y + r * 0.35} ${x + dir * r * 1.7} ${y + r * 1.05} Z`;
+    return (
+      <>
+        {shadow(y + r * 1.45)}
+        <path d={wing(-1)} fill={color} {...stroke} />
+        <path d={wing(1)} fill={color} {...stroke} />
+        <circle cx={x} cy={y} r={r * 0.52} fill={color} {...stroke} />
+        <circle cx={x - r * 0.16} cy={y - r * 0.16} r={r * 0.16} fill="#fdfcf7" opacity={0.85} />
       </>
     );
   }
