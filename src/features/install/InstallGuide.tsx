@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { copyCurrentLink, platformStep, type InstallStep } from '../../shared/lib/install';
+import { pendingInviteCode, pendingRefCouple } from '../../shared/lib/invite';
 
 /**
  * 소개 + 홈 화면 설치 안내 (/install).
@@ -202,7 +203,16 @@ function ShareIntro() {
 }
 
 async function copyLink(setCopied: (v: boolean) => void) {
-  const ok = await copyCurrentLink(SITE);
+  // 인앱 브라우저 → Safari로 옮기는 복사다. 부팅 때 URL에서 걷어 저장해 둔
+  // 초대 코드·소개 커플 id를 다시 붙여 준다 — 안 붙이면 localStorage가 브라우저를
+  // 못 넘어가서 코드 프리필·소개 귀속이 여기서 끊긴다.
+  const params = new URLSearchParams();
+  const invite = pendingInviteCode();
+  const ref = pendingRefCouple();
+  if (invite) params.set('invite', invite);
+  if (ref) params.set('ref', ref);
+  const q = params.toString();
+  const ok = await copyCurrentLink(q ? `${SITE}/?${q}` : SITE);
   setCopied(ok);
 }
 
