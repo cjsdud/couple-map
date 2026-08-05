@@ -471,6 +471,59 @@ export interface DayDetail {
   isLoading: boolean;
 }
 
+/**
+ * 목 오늘 사진 — 미리보기(?mock=1)에서 사진 그리드가 비어 "2/30장인데 썸네일이 없는"
+ * 어색함을 없앤다. 기록 목사진과 같은 그라데이션 생성 방식. 첫 장에만 위치 태그를 줘서
+ * '핀으로 승격' 버튼까지 데모된다.
+ */
+const MOCK_DAILY_SPECS: Record<'me' | 'partner', { a: string; b: string; lat: number | null; lng: number | null }[]> = {
+  me: [
+    { a: '#f7b267', b: '#e8637c', lat: 37.5556, lng: 126.8958 }, // 망원 노을 산책
+    { a: '#9ec3d8', b: '#54748c', lat: null, lng: null },
+  ],
+  partner: [
+    { a: '#8cab68', b: '#3c5c33', lat: null, lng: null },
+    { a: '#c9a6e0', b: '#f4a6c0', lat: null, lng: null },
+  ],
+};
+
+const mockDailyCache: Partial<Record<'me' | 'partner', DailyPhoto[]>> = {};
+
+export function mockDailyPhotos(who: 'me' | 'partner'): DailyPhoto[] {
+  const cached = mockDailyCache[who];
+  if (cached) return cached;
+  const made = MOCK_DAILY_SPECS[who].map((sp, i) => {
+    const c = document.createElement('canvas');
+    c.width = 900;
+    c.height = 900;
+    const x = c.getContext('2d');
+    if (x) {
+      const g = x.createLinearGradient(0, 0, 900, 900);
+      g.addColorStop(0, sp.a);
+      g.addColorStop(1, sp.b);
+      x.fillStyle = g;
+      x.fillRect(0, 0, 900, 900);
+      x.globalAlpha = 0.25;
+      for (let k = 0; k < 7; k++) {
+        x.beginPath();
+        x.arc((k * 211 + i * 97) % 900, (k * 157 + i * 131) % 900, 60 + ((k * 53 + i * 29) % 120), 0, Math.PI * 2);
+        x.fillStyle = k % 2 ? '#ffffff' : '#00000033';
+        x.fill();
+      }
+    }
+    return {
+      id: `mock-daily-${who}-${i}`,
+      entry_id: who === 'me' ? 'mock-me' : 'mock-partner',
+      storage_path: '',
+      lat: sp.lat,
+      lng: sp.lng,
+      signedUrl: c.toDataURL('image/jpeg', 0.8),
+    };
+  });
+  mockDailyCache[who] = made;
+  return made;
+}
+
 /** 목: 둘 다 참여를 마친 날의 엔트리 쌍 — 오늘 카드(저장 후 상태)와 잔디 상세 데모 겸용 */
 export function mockTodayPair(date: string): { myEntry: DailyEntry; partnerEntry: DailyEntry } {
   const base = { couple_id: 'mock-couple', entry_date: date, question_id: 1 };

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { calcStreak, monthGrid } from '../../shared/lib/daily';
+import { calcStreak, formatKoreanDate, monthGrid } from '../../shared/lib/daily';
 import ActivityBell from '../activity/ActivityBell';
 import PushInvite from '../push/PushInvite';
 import { coordToRegion } from '../../shared/lib/kakao';
@@ -19,6 +19,7 @@ import { useCoupleMembers } from '../map/useRecords';
 import type { PhotoDraft, SpotDraft } from '../map/useRecords';
 import {
   isMock,
+  mockDailyPhotos,
   mockTodayPair,
   useDailyEntries,
   useDailyPhotos,
@@ -35,8 +36,26 @@ import {
   type DailyPhoto,
 } from './useToday';
 
-const MOODS = ['😊', '🥰', '😆', '😴', '😢', '😤'];
+/** 기분 이모지 + 한글 감정명 — 값(DB 저장)은 이모지 그대로 (기존 데이터 호환) */
+const MOODS = [
+  { emoji: '😊', label: '기쁨' },
+  { emoji: '🥰', label: '설렘' },
+  { emoji: '😆', label: '신남' },
+  { emoji: '😴', label: '피곤' },
+  { emoji: '😢', label: '눈물' },
+  { emoji: '😤', label: '심통' },
+];
 const DAILY_PHOTO_LIMIT = 30;
+
+/** 마스킹테이프 조각 — 도화지에 붙여 둔 종이 느낌 (프로토타입의 테이프 모티프) */
+function Tape({ className }: { className: string }) {
+  return (
+    <div
+      aria-hidden
+      className={`pointer-events-none absolute -top-2.5 left-1/2 h-5 w-16 -translate-x-1/2 rounded-[2px] border border-ink/10 ${className}`}
+    />
+  );
+}
 
 /** 오늘 탭: 통합 작성(기분·질문 답·한 줄 일기) · 사진(저장 후 자유) · 잔디 · 스트릭 (명세 §3.2) */
 export default function TodayScreen() {
@@ -49,9 +68,24 @@ export default function TodayScreen() {
   const partnerEntry = mockPair?.partnerEntry ?? entries.find((e) => e.user_id !== userId) ?? null;
   const photosQuery = useDailyPhotos(entries.map((e) => e.id));
   const photos = photosQuery.data ?? [];
-  const myPhotos = myEntry ? photos.filter((p) => p.entry_id === myEntry.id) : [];
-  const partnerPhotos = partnerEntry ? photos.filter((p) => p.entry_id === partnerEntry.id) : [];
+  const myPhotos = isMock()
+    ? mockDailyPhotos('me')
+    : myEntry
+      ? photos.filter((p) => p.entry_id === myEntry.id)
+      : [];
+  const partnerPhotos = isMock()
+    ? mockDailyPhotos('partner')
+    : partnerEntry
+      ? photos.filter((p) => p.entry_id === partnerEntry.id)
+      : [];
   const unlocked = isMock() ? true : myPhotos.length > 0;
+
+  // 짝꿍 닉네임 — '짝꿍'이라는 일반명사 대신 실제 이름을 불러 온기를 더한다
+  const meId = isMock() ? 'mock-me' : userId;
+  const members = useCoupleMembers();
+  const partnerName = members.data?.find((mem) => mem.user_id !== meId)?.nickname ?? null;
+  // 사귄 D+N — 헤더에 상시 노출 (미리보기는 데모 값)
+  const dday = isMock() ? 152 : ddayFrom(couple?.started_at ?? null, entryDate);
 
   // 참여 = 기분·질문 답·한 줄 일기 중 1+ (사진은 자유 요소 — 참여 인정과 무관)
   const participated = Boolean(
@@ -112,7 +146,14 @@ export default function TodayScreen() {
       <header className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold">오늘</h1>
-          <p className="text-sm opacity-70">{entryDate}</p>
+          <p className="text-sm">
+            <span className="opacity-70">{formatKoreanDate(entryDate)}</span>
+            {dday !== null && (
+              <span className="ml-1.5 rounded-full bg-pink/10 px-2 py-0.5 text-xs font-bold text-pink">
+                D+{dday}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {streak > 0 && (
@@ -131,7 +172,12 @@ export default function TodayScreen() {
           partnerEntry={partnerEntry}
           startedAt={couple?.started_at ?? null}
           entryDate={entryDate}
+          partnerName={partnerName}
+          photoCount={myPhotos.length}
           onEdit={() => setEditing(true)}
+          onPhotos={() =>
+            document.getElementById('today-photos')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
         />
       ) : (
         <ComposeCard
@@ -150,7 +196,7 @@ export default function TodayScreen() {
       )}
       <UploadCard
         participated={participated}
-        myCount={isMock() ? 2 : myPhotos.length}
+        myCount={myPhotos.length}
         photos={myPhotos}
         ctx={ctx}
         onPromote={promote}
@@ -158,6 +204,7 @@ export default function TodayScreen() {
       />
       <PartnerCard
         partnerEntry={partnerEntry}
+        partnerName={partnerName}
         unlocked={unlocked}
         urls={partnerPhotos.map((p) => p.signedUrl ?? '')}
         onView={setViewerUrl}
@@ -221,7 +268,8 @@ function ComposeCard({
   const filled = mood !== null || answer.trim() !== '' || note.trim() !== '';
 
   return (
-    <section className="space-y-3 rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/60 p-4">
+    <section className="relative space-y-4 rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/60 p-4 pt-5">
+      <Tape className="-rotate-2 bg-yellow/60" />
       <div>
         <h2 className="text-sm font-semibold">{editing ? '오늘 수정하기' : '오늘 남기기'}</h2>
         <p className="text-xs opacity-50">
@@ -231,27 +279,10 @@ function ComposeCard({
         </p>
       </div>
 
-      {/* ① 기분 (다시 누르면 해제) */}
-      <div className="flex justify-between">
-        {MOODS.map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMood(mood === m ? null : m)}
-            className={`h-11 w-11 rounded-full text-2xl transition ${
-              mood === m ? 'bg-yellow/60 ring-2 ring-yellow' : 'active:bg-ink/5'
-            }`}
-            aria-label={`기분 ${m}`}
-            aria-pressed={mood === m}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
-
-      {/* ② 오늘의 질문 */}
-      <div className="space-y-2">
-        <p className="break-words text-base font-semibold leading-relaxed">
+      {/* ① 오늘의 질문 — 이 탭의 정서적 중심이라 맨 위에 크게 무대를 준다 */}
+      <div className="space-y-2 rounded-xl rounded-tl-sm bg-yellow/15 p-3">
+        <p className="text-xs font-semibold opacity-60">💬 오늘의 질문</p>
+        <p className="break-words text-lg font-bold leading-snug">
           {question.data?.text ?? '질문을 가져오는 중…'}
         </p>
         <textarea
@@ -260,7 +291,7 @@ function ComposeCard({
           rows={2}
           maxLength={280}
           placeholder="내 답 적기 (선택)"
-          className="w-full resize-none rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink"
+          className="w-full resize-none rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/80 px-4 py-2.5 outline-none focus:border-pink"
         />
         {partnerEntry?.has_answer && !partnerEntry.answer && (
           <p className="text-xs opacity-60">짝꿍이 먼저 답했어요 — 내가 답하면 열려요</p>
@@ -274,15 +305,40 @@ function ComposeCard({
         )}
       </div>
 
+      {/* ② 기분 (다시 누르면 해제) */}
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold opacity-60">오늘의 기분</p>
+        <div className="flex justify-between">
+          {MOODS.map((m) => (
+            <button
+              key={m.emoji}
+              type="button"
+              onClick={() => setMood(mood === m.emoji ? null : m.emoji)}
+              className={`flex h-14 w-12 flex-col items-center justify-center gap-0.5 rounded-xl rounded-tl-sm transition ${
+                mood === m.emoji ? '-rotate-3 bg-yellow/60 ring-2 ring-yellow' : 'active:bg-ink/5'
+              }`}
+              aria-label={`기분 ${m.label}`}
+              aria-pressed={mood === m.emoji}
+            >
+              <span aria-hidden className="text-2xl leading-none">{m.emoji}</span>
+              <span className="text-[10px] font-semibold opacity-60">{m.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* ③ 한 줄 일기 */}
-      <input
-        type="text"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        maxLength={120}
-        placeholder="한 줄 일기 (선택)"
-        className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink"
-      />
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold opacity-60">한 줄 일기</p>
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={120}
+          placeholder="오늘 하루를 한 줄로 남겨요 (선택)"
+          className="w-full rounded-2xl rounded-tl-md border-2 border-ink/15 bg-white/70 px-4 py-2.5 outline-none focus:border-pink"
+        />
+      </div>
 
       {/* ④ 저장 버튼 1개 — 셋 중 하나 이상 채워야 활성 (수정도 같은 저장 경로로 덮어쓰기) */}
       <button
@@ -311,7 +367,6 @@ function ComposeCard({
       {save.isError && (
         <p className="text-xs text-pink">저장하지 못했어요. 다시 시도해 주세요.</p>
       )}
-      {!editing && <p className="text-xs opacity-50">저장하면 아래에서 사진도 올릴 수 있어요</p>}
       {mock ? (
         <p className="text-xs opacity-50">미리보기예요 — 저장은 짝꿍과 연결한 뒤에 할 수 있어요</p>
       ) : (
@@ -322,18 +377,46 @@ function ComposeCard({
 }
 
 // ── 나의 오늘 (저장 후 상태 — 남긴 기분·답·일기 표시 + 수정 진입) ──
+
+/** 오늘의 조각 칩 — 채운 항목은 ✓, 빈 항목은 점선 +로 마저 채우게 초대 (압박 어휘 금지) */
+function PieceChip({ label, filled, onFill }: { label: string; filled: boolean; onFill: () => void }) {
+  if (filled) {
+    return (
+      <span className="rounded-full border border-green/50 bg-green/15 px-2.5 py-1 text-xs font-semibold">
+        {label} ✓
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onFill}
+      className="rounded-full border-2 border-dashed border-ink/20 px-2.5 py-1 text-xs font-semibold opacity-50 active:opacity-80"
+    >
+      {label} +
+    </button>
+  );
+}
+
 function MyTodayCard({
   myEntry,
   partnerEntry,
   startedAt,
   entryDate,
+  partnerName,
+  photoCount,
   onEdit,
+  onPhotos,
 }: {
   myEntry: DailyEntry;
   partnerEntry: DailyEntry | null;
   startedAt: string | null;
   entryDate: string;
+  partnerName: string | null;
+  photoCount: number;
   onEdit: () => void;
+  /** '사진 +' 조각 탭 → 오늘 사진 카드로 스크롤 */
+  onPhotos: () => void;
 }) {
   const question = useDayQuestion(
     startedAt,
@@ -341,9 +424,11 @@ function MyTodayCard({
     myEntry.question_id ?? partnerEntry?.question_id ?? null,
   );
   const showQuestion = myEntry.has_answer || partnerEntry?.has_answer;
+  const bothAnswered = Boolean(myEntry.answer && partnerEntry?.answer);
 
   return (
-    <section className="space-y-3 rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/60 p-4">
+    <section className="relative space-y-3 rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/60 p-4 pt-5">
+      <Tape className="rotate-1 bg-pink/25" />
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">나의 오늘</h2>
         <div className="flex items-center gap-2">
@@ -362,6 +447,14 @@ function MyTodayCard({
         </div>
       </div>
 
+      {/* 오늘의 조각 — 오늘 하루가 얼마나 모였는지 한눈에, 빈 조각은 바로 채우러 */}
+      <div className="flex flex-wrap gap-1.5">
+        <PieceChip label="기분" filled={myEntry.mood !== null} onFill={onEdit} />
+        <PieceChip label="한 줄 일기" filled={myEntry.note !== null} onFill={onEdit} />
+        <PieceChip label="질문 답" filled={myEntry.has_answer || myEntry.answer !== null} onFill={onEdit} />
+        <PieceChip label={photoCount > 0 ? `사진 ${photoCount}` : '사진'} filled={photoCount > 0} onFill={onPhotos} />
+      </div>
+
       {myEntry.note && (
         <div>
           <p className="text-xs font-semibold opacity-60">한 줄 일기</p>
@@ -370,17 +463,24 @@ function MyTodayCard({
       )}
 
       {showQuestion && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold opacity-60">오늘의 질문</p>
-          <p className="break-words text-base font-semibold leading-relaxed">
+        <div className="space-y-2 rounded-xl rounded-tl-sm bg-yellow/15 p-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold">
+            <span className="opacity-60">💬 오늘의 질문</span>
+            {bothAnswered && (
+              <span className="rounded-full bg-yellow/50 px-2 py-0.5 text-[10px] font-bold">
+                둘 다 답했어요 ✨
+              </span>
+            )}
+          </p>
+          <p className="break-words text-base font-bold leading-snug">
             {question.data?.text ?? '질문을 가져오는 중…'}
           </p>
           {myEntry.answer && (
-            <p className="break-words rounded-xl rounded-tl-sm bg-paper px-3 py-2 text-sm">{myEntry.answer}</p>
+            <p className="break-words rounded-xl rounded-tl-sm bg-white/80 px-3 py-2 text-sm">{myEntry.answer}</p>
           )}
           {partnerEntry?.answer ? (
             <div className="rounded-xl rounded-br-sm bg-sky/25 px-3 py-2">
-              <p className="text-xs font-semibold opacity-60">짝꿍의 답</p>
+              <p className="text-xs font-semibold opacity-60">{partnerName ?? '짝꿍'}의 답</p>
               <p className="break-words text-sm">{partnerEntry.answer}</p>
             </div>
           ) : partnerEntry?.has_answer ? (
@@ -433,7 +533,7 @@ function UploadCard({
   };
 
   return (
-    <section className="space-y-3 rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/60 p-4">
+    <section id="today-photos" className="space-y-3 rounded-2xl rounded-tr-md border-2 border-ink/15 bg-white/60 p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">오늘 사진</h2>
         <span className="text-xs opacity-50">{myCount}/{DAILY_PHOTO_LIMIT}장</span>
@@ -486,6 +586,17 @@ function UploadCard({
               )}
             </div>
           ))}
+          {/* 그리드 끝의 + 타일 — 아래 큰 버튼을 반복하는 대신 사진 옆에서 바로 추가 */}
+          <button
+            type="button"
+            aria-label="오늘 사진 더 올리기"
+            disabled={!canUpload || upload.isPending}
+            onClick={() => inputRef.current?.click()}
+            className="flex aspect-square w-full flex-col items-center justify-center gap-0.5 rounded-xl rounded-tl-sm border-2 border-dashed border-ink/25 text-ink/50 active:bg-ink/5 disabled:opacity-40"
+          >
+            <span aria-hidden className="text-xl leading-none">+</span>
+            <span className="text-[10px] font-semibold">{upload.isPending ? '올리는 중' : '추가'}</span>
+          </button>
         </div>
       )}
       {confirmId !== null && myCount === 1 && (
@@ -521,14 +632,19 @@ function UploadCard({
           e.target.value = '';
         }}
       />
-      <button
-        type="button"
-        disabled={!canUpload || upload.isPending}
-        onClick={() => inputRef.current?.click()}
-        className="w-full rounded-2xl rounded-tl-md bg-pink px-5 py-3 text-sm font-bold text-white active:translate-y-px disabled:opacity-40"
-      >
-        {upload.isPending ? '올리는 중…' : '오늘 사진 올리기'}
-      </button>
+      {photos.length === 0 && participated && (
+        // 첫 장 올리기 — 빈 그리드 대신 넓은 점선 타일로 초대 (작성 카드의 핑크 CTA와 역할 구분)
+        <button
+          type="button"
+          disabled={!canUpload || upload.isPending}
+          onClick={() => inputRef.current?.click()}
+          className="flex w-full flex-col items-center gap-1 rounded-2xl rounded-tl-md border-2 border-dashed border-ink/25 bg-white/50 px-5 py-6 active:bg-ink/5 disabled:opacity-40"
+        >
+          <span aria-hidden className="text-2xl leading-none">📸</span>
+          <span className="text-sm font-bold">{upload.isPending ? '올리는 중…' : '오늘 사진 올리기'}</span>
+          <span className="text-xs opacity-50">오늘의 순간을 여기에 담아 둬요</span>
+        </button>
+      )}
       {!participated && (
         <p className="text-xs opacity-50">위에서 오늘을 먼저 남기면 사진도 올릴 수 있어요</p>
       )}
@@ -545,21 +661,25 @@ function UploadCard({
 // ── 짝꿍의 오늘 (기분·한 줄 일기는 바로 보임, 사진만 상호 잠금) ────
 function PartnerCard({
   partnerEntry,
+  partnerName,
   unlocked,
   urls,
   onView,
 }: {
   partnerEntry: DailyEntry | null;
+  partnerName: string | null;
   unlocked: boolean;
   urls: string[];
   /** 사진 탭 → 크게 보기 */
   onView: (url: string) => void;
 }) {
   const shown = urls.filter(Boolean);
+  const name = partnerName ?? '짝꿍';
   return (
-    <section className="space-y-3 rounded-2xl rounded-bl-md border-2 border-ink/15 bg-white/60 p-4">
+    <section className="relative space-y-3 rounded-2xl rounded-bl-md border-2 border-ink/15 bg-white/60 p-4 pt-5">
+      <Tape className="rotate-2 bg-sky/50" />
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">짝꿍의 오늘</h2>
+        <h2 className="text-sm font-semibold">{name}의 오늘</h2>
         {partnerEntry?.mood && (
           <span className="text-2xl" aria-label={`짝꿍 기분 ${partnerEntry.mood}`}>
             {partnerEntry.mood}
@@ -568,14 +688,14 @@ function PartnerCard({
       </div>
       {partnerEntry?.note && (
         <div>
-          <p className="text-xs font-semibold opacity-60">짝꿍의 한 줄 일기</p>
+          <p className="text-xs font-semibold opacity-60">{name}의 한 줄 일기</p>
           <p className="mt-1 break-words rounded-xl rounded-br-sm bg-sky/25 px-3 py-2 text-sm">{partnerEntry.note}</p>
         </div>
       )}
       {!unlocked ? (
         <div className="space-y-1.5 rounded-xl rounded-bl-sm border-2 border-dashed border-ink/25 bg-white/50 p-4 text-center">
           <p className="text-2xl" aria-hidden>🔒</p>
-          <p className="text-sm font-semibold">짝꿍의 오늘 사진이 잠겨 있어요</p>
+          <p className="text-sm font-semibold">{name}의 오늘 사진이 잠겨 있어요</p>
           {/* 상시 설명 문구 — 사용자 검증으로 확정된 카피, 잠금 상태에서 항상 노출 */}
           <p className="text-xs opacity-70">내 사진을 올리면 짝꿍의 오늘이 열려요</p>
         </div>
@@ -587,10 +707,14 @@ function PartnerCard({
             </button>
           ))}
         </div>
+      ) : partnerEntry ? (
+        <p className="text-sm opacity-60">사진은 아직 안 올렸어요</p>
       ) : (
-        <p className="text-sm opacity-60">
-          {partnerEntry ? '짝꿍이 사진은 아직 안 올렸어요' : '짝꿍의 오늘을 기다리는 중이에요'}
-        </p>
+        <div className="space-y-1 rounded-xl rounded-bl-sm border-2 border-dashed border-ink/20 bg-white/50 p-5 text-center">
+          <p className="text-2xl" aria-hidden>🌙</p>
+          <p className="text-sm font-semibold">아직 오늘을 남기기 전이에요</p>
+          <p className="text-xs opacity-60">내 오늘을 먼저 남기고 살짝 기다려 봐요</p>
+        </div>
       )}
     </section>
   );
@@ -613,6 +737,8 @@ function GrassCard({
   const weeks = monthGrid(view.year, view.month);
   const levelByDate = new Map(grass.map((g) => [g.date, g.level]));
   const isCurrentMonth = view.year === thisYear && view.month === thisMonth;
+  // 이 달에 둘이 함께 채운 날 수 — 잔디 카드에 실속 수치 하나
+  const bothCount = grass.filter((g) => g.level === 'both').length;
 
   const goPrev = () =>
     setView((v) => (v.month === 1 ? { year: v.year - 1, month: 12 } : { year: v.year, month: v.month - 1 }));
@@ -648,7 +774,11 @@ function GrassCard({
           </button>
         </div>
       </div>
-      <p className="text-xs opacity-50">기분·질문 답·한 줄 일기 중 하나만 남겨도 채워져요 · 사진은 자유예요</p>
+      <p className="text-xs">
+        <span className="opacity-50">{isCurrentMonth ? '이번 달' : `${view.month}월에`} 함께 채운 날 </span>
+        <span className="font-bold text-green">{bothCount}일</span>
+        <span className="opacity-50"> · 기분·답·일기 하나만 남겨도 채워져요</span>
+      </p>
       <div className="space-y-1">
         {weeks.map((week, wi) => (
           <div key={wi} className="grid grid-cols-7 gap-1">

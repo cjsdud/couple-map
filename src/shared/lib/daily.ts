@@ -14,6 +14,14 @@ export function toDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+/** '2026-08-05' → '8월 5일 수요일' — 화면 표기용 (ISO 원문 노출 방지) */
+export function formatKoreanDate(date: string): string {
+  const d = new Date(`${date}T12:00:00`);
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일`;
+}
+
 /**
  * 커플 마감 시각 기준 '그날'(entry_date) 계산: now에서 cutoff 시간을 뺀 시각의 날짜.
  * 서버 트리거가 같은 규칙으로 재검증한다 (tech-design §4).
