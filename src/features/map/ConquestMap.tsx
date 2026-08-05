@@ -302,6 +302,11 @@ export default function ConquestMap({
   );
   // 시군구 이름은 2.6배부터 — 행정동 세분화는 어지럽다는 사용자 피드백(2026-07-23)으로 제거
   const showRegionNames = scaleFactor <= 1 / 2.6;
+  // 핀·글자의 화면 크기 고정 보정은 12배까지만 — 그보다 깊이 들어가면 보정을 멈춰
+  // 지도와 함께 커지게 한다. 최대 32배에선 화면상 약 2.7배 (사용자 요청 2026-08-05:
+  // "일정 크기 이상에선 가만히 냅둬서 더 크게 볼 수 있게").
+  // 8배 동결은 최대 확대에서 핀이 화면 절반을 덮고 이웃 라벨 겹침이 굳어 과했다.
+  const decoScale = Math.max(scaleFactor, 1 / 12);
   // 시군구 경계 그물망은 기본 배율에서 감춤(선거지도 느낌 제거) → 확대할수록 서서히 나타남.
   // 수도권처럼 작은 시·구가 밀집한 곳이 뭉쳐 보이지 않게 시작을 늦추고 상한을 낮게.
   const detail = Math.max(0, Math.min(1, (1 / scaleFactor - 2) / 2.5));
@@ -404,8 +409,8 @@ export default function ConquestMap({
                 (p) =>
                   inView(p.cx, p.cy) &&
                   // 가로·세로 모두 여유 있게 들어갈 때만 (계속 삐져나간다는 피드백 → 여유폭 강화)
-                  p.name.length * 22 * scaleFactor <= p.lw * 0.8 &&
-                  28 * scaleFactor <= p.lh,
+                  p.name.length * 22 * decoScale <= p.lw * 0.8 &&
+                  28 * decoScale <= p.lh,
               )
               .map((p) => (
                 <text
@@ -414,12 +419,12 @@ export default function ConquestMap({
                   y={p.cy}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fontSize={22 * scaleFactor}
+                  fontSize={22 * decoScale}
                   fontWeight={500}
                   fill="#3b3733"
                   opacity={0.4}
                   stroke={paper}
-                  strokeWidth={3.5 * scaleFactor}
+                  strokeWidth={3.5 * decoScale}
                   paintOrder="stroke"
                 >
                   {p.name}
@@ -427,7 +432,7 @@ export default function ConquestMap({
               ))}
           </g>
         )}
-        <SpotOverlay toXY={projected.toXY} onSelectRecord={onSelectRecord} scaleFactor={scaleFactor} pin={pin} />
+        <SpotOverlay toXY={projected.toXY} onSelectRecord={onSelectRecord} scaleFactor={decoScale} pin={pin} />
       </svg>
 
       {/* 줌 컨트롤 — 핀치가 어려운 환경 대비 */}
@@ -557,7 +562,7 @@ function SpotOverlay({
 }: {
   toXY: (lng: number, lat: number) => [number, number];
   onSelectRecord?: (recordId: string) => void;
-  /** 줌 배율 보정 — 확대해도 점 크기가 화면상 일정하게 */
+  /** 줌 배율 보정 — 12배까지는 화면상 일정, 그 너머는 고정값이 와서 지도와 함께 커진다 */
   scaleFactor: number;
   /** 핀 모양 (도화지 꾸미기) */
   pin: string;
@@ -603,7 +608,7 @@ function SpotOverlay({
                 <title>{p.s.name}</title>
                 <PinShape style={pin} x={p.xy[0]} y={p.xy[1]} r={r} color={color} sf={scaleFactor} />
                 {showLabels && (
-                  // 종이색 테두리 글자 — 경계선 위에서도 읽히게 (화면상 크기 일정)
+                  // 종이색 테두리 글자 — 경계선 위에서도 읽히게 (12배 너머는 지도와 함께 커짐)
                   <text
                     x={p.xy[0]}
                     y={p.xy[1] + 18 * scaleFactor}
