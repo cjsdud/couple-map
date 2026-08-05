@@ -48,7 +48,7 @@ function createPin(name: string, color: string, style: string, onClick: () => vo
 
   const label = document.createElement('span');
   label.style.cssText =
-    `position:absolute;left:0;top:${pin.labelOffset}px;transform:translateX(-50%);font-size:11px;font-weight:700;` +
+    `position:absolute;left:0;top:${pin.labelOffset}px;transform:translateX(-50%);font-size:12px;font-weight:700;` +
     'color:#3b3733;text-shadow:0 0 3px #fdfcf7,0 0 3px #fdfcf7;white-space:nowrap;pointer-events:none';
   // textContent — 장소 이름에 <, & 가 있어도 깨지지 않게 (innerHTML로 넣던 것을 바꿈)
   label.textContent = name;

@@ -17,7 +17,7 @@ interface SigunguGeo {
 }
 
 const VIEW_W = 800;
-const MAX_ZOOM = 16;
+const MAX_ZOOM = 32; // 동네 골목까지 — 16에서 상향 (사용자 요청 2026-08-05: 더 확대되게)
 /** 바다 — 부드러운 수채 블루 (데이터 지도 느낌 대신 따뜻한 종이 위 바다) */
 const SEA_COLOR = '#d6e4ea';
 /** 정복 색칠 — 색연필 초록 + 칠한 자국 테두리 */
@@ -404,8 +404,8 @@ export default function ConquestMap({
                 (p) =>
                   inView(p.cx, p.cy) &&
                   // 가로·세로 모두 여유 있게 들어갈 때만 (계속 삐져나간다는 피드백 → 여유폭 강화)
-                  p.name.length * 20 * scaleFactor <= p.lw * 0.8 &&
-                  26 * scaleFactor <= p.lh,
+                  p.name.length * 22 * scaleFactor <= p.lw * 0.8 &&
+                  28 * scaleFactor <= p.lh,
               )
               .map((p) => (
                 <text
@@ -414,7 +414,7 @@ export default function ConquestMap({
                   y={p.cy}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fontSize={20 * scaleFactor}
+                  fontSize={22 * scaleFactor}
                   fontWeight={500}
                   fill="#3b3733"
                   opacity={0.4}
@@ -606,14 +606,14 @@ function SpotOverlay({
                   // 종이색 테두리 글자 — 경계선 위에서도 읽히게 (화면상 크기 일정)
                   <text
                     x={p.xy[0]}
-                    y={p.xy[1] + 16 * scaleFactor}
+                    y={p.xy[1] + 18 * scaleFactor}
                     textAnchor="middle"
                     dominantBaseline="hanging"
-                    fontSize={15 * scaleFactor}
+                    fontSize={18 * scaleFactor}
                     fontWeight={700}
                     fill="#3b3733"
                     stroke="#fdfcf7"
-                    strokeWidth={3.5 * scaleFactor}
+                    strokeWidth={4 * scaleFactor}
                     paintOrder="stroke"
                   >
                     {p.s.name}
