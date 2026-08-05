@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSession } from '../../shared/lib/auth';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import { useCoupleMembers } from '../map/useRecords';
 import {
@@ -21,6 +22,10 @@ import {
 export default function ActivityBell() {
   const feed = useActivityFeed();
   const members = useCoupleMembers().data ?? [];
+  const { session } = useSession();
+  const myId = new URLSearchParams(window.location.search).has('mock')
+    ? 'mock-me'
+    : session?.user.id;
   const [open, setOpen] = useState(false);
   const [readAt, setReadAt] = useState(loadReadAt);
 
@@ -31,8 +36,11 @@ export default function ActivityBell() {
   if (!feed.available) return null;
 
   const unread = feed.items.filter((i) => i.created_at > readAt).length;
-  const nameOf = (userId: string) =>
-    members.find((m) => m.user_id === userId)?.nickname?.trim() || '짝꿍';
+  const nameOf = (userId: string) => {
+    // 내 줄은 기념일 예외로만 남는다 (useActivityFeed 필터) — 닉네임 대신 '나'로
+    if (userId === myId) return '나';
+    return members.find((m) => m.user_id === userId)?.nickname?.trim() || '짝꿍';
+  };
 
   const openSheet = () => {
     setOpen(true);
@@ -65,7 +73,7 @@ export default function ActivityBell() {
               🔔
             </p>
             <p className="break-keep text-sm opacity-60">
-              아직 소식이 없어요 — 데이트를 남기면 여기에 쌓여요
+              아직 소식이 없어요 — 짝꿍이 무언가 남기면 여기에 쌓여요
             </p>
           </div>
         ) : (

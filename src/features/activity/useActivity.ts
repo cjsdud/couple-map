@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useSession } from '../../shared/lib/auth';
 import { supabase } from '../../shared/lib/supabase';
 
 // useRecords의 isMock와 같은 판정 — 순환 import(기록 훅 ↔ 보관함)를 피해 여기서 직접 본다
@@ -47,6 +48,16 @@ export const ACTIVITY_ICONS: Record<ActivityKind, string> = {
 
 /** 보관함 표시 상한 — 무한 스크롤은 과하다 (설계 메모) */
 const FEED_LIMIT = 100;
+
+/**
+ * 내가 한 액션은 내 알림에 안 띄운다 (사용자 결정 2026-08-05) — 알림은 "짝꿍의 소식"이다.
+ * 단, 기념일 소식은 누가 달았든 둘 모두의 날이라 예외로 남긴다.
+ * 기록 자체는 전부 남긴다 — 거르는 건 표시 단계뿐 (관리자 집계는 그대로 전체를 본다).
+ */
+const SHOW_MINE_KINDS: ReadonlySet<ActivityKind> = new Set([
+  'anniversary_create',
+  'anniversary_delete',
+]);
 
 // ── ?mock=1 데모 — 보관함 UI를 실계정 없이 보여준다 ────────────────
 const mockFeed: ActivityItem[] = [];
@@ -137,6 +148,8 @@ export function onFeedChanged(fn: () => void): () => void {
  * 0017 미적용 환경에서는 조용히 "없음"으로 (`available: false` → 종 아이콘 숨김).
  */
 export function useActivityFeed() {
+  const { session } = useSession();
+  const myId = isMock() ? 'mock-me' : session?.user.id;
   const query = useQuery({
     queryKey: ['activity'],
     staleTime: 30_000,
@@ -158,7 +171,8 @@ export function useActivityFeed() {
     enabled: isMock() || Boolean(supabase),
   });
   return {
-    items: query.data ?? [],
+    // 내 액션은 뺀다 (기념일만 예외) — 뱃지 수도 이 필터를 지난 것만 센다
+    items: (query.data ?? []).filter((i) => i.actor_id !== myId || SHOW_MINE_KINDS.has(i.kind)),
     available: query.data !== null && query.data !== undefined,
     refetch: query.refetch,
   };

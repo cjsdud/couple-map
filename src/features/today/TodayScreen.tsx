@@ -484,9 +484,17 @@ function MyTodayCard({
               <p className="break-words text-sm">{partnerEntry.answer}</p>
             </div>
           ) : partnerEntry?.has_answer ? (
-            <p className="text-xs opacity-60">짝꿍이 먼저 답했어요 — 내가 답하면 열려요</p>
+            // 짝꿍은 답했는데 내가 아직 — 사진 잠금과 같은 문법의 잠금 타일
+            <div className="space-y-0.5 rounded-xl rounded-br-sm border-2 border-dashed border-ink/20 bg-sky/10 px-3 py-3 text-center">
+              <p className="break-keep text-sm font-semibold">🔒 {partnerName ?? '짝꿍'}의 답이 잠겨 있어요</p>
+              <p className="break-keep text-xs opacity-60">내가 답하면 바로 열려요</p>
+            </div>
           ) : myEntry.has_answer ? (
-            <p className="text-xs opacity-60">둘 다 답하면 서로의 답이 열려요</p>
+            // 내가 답하고 짝꿍은 아직 — 빈자리를 잠금 타일로 보여줘서 '기다리는 중'이 눈에 보이게
+            <div className="space-y-0.5 rounded-xl rounded-br-sm border-2 border-dashed border-ink/20 bg-white/50 px-3 py-3 text-center">
+              <p className="break-keep text-sm font-semibold">🔒 {partnerName ?? '짝꿍'}의 답은 아직 잠겨 있어요</p>
+              <p className="break-keep text-xs opacity-60">아직 답하기 전이에요 — 답이 오면 여기에 열려요</p>
+            </div>
           ) : null}
         </div>
       )}
