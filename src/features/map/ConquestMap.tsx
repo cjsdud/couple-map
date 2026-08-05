@@ -17,7 +17,7 @@ interface SigunguGeo {
 }
 
 const VIEW_W = 800;
-const MAX_ZOOM = 32; // 동네 골목까지 — 16에서 상향 (사용자 요청 2026-08-05: 더 확대되게)
+const MAX_ZOOM = 64; // 골목 스팟 하나까지 — 16→32→64 (사용자 요청 2026-08-05: 더더 확대되게)
 /** 바다 — 부드러운 수채 블루 (데이터 지도 느낌 대신 따뜻한 종이 위 바다) */
 const SEA_COLOR = '#d6e4ea';
 /** 정복 색칠 — 색연필 초록 + 칠한 자국 테두리 */
@@ -302,11 +302,11 @@ export default function ConquestMap({
   );
   // 시군구 이름은 2.6배부터 — 행정동 세분화는 어지럽다는 사용자 피드백(2026-07-23)으로 제거
   const showRegionNames = scaleFactor <= 1 / 2.6;
-  // 핀·글자의 화면 크기 고정 보정은 16배까지만 — 그보다 깊이 들어가면 보정을 멈춰
-  // 지도와 함께 커지게 한다. 최대 32배에선 화면상 2배 (사용자 요청 2026-08-05:
-  // "일정 크기 이상에선 가만히 냅둬서 더 크게 볼 수 있게").
-  // 8배 동결은 핀이 과대, 12배도 이르다는 피드백 → 16배로 늦췄다 (겹침도 더 풀린 뒤 동결).
-  const decoScale = Math.max(scaleFactor, 1 / 16);
+  // 핀·글자의 화면 크기 고정 보정은 32배까지만 — 그보다 깊이 들어가면 보정을 멈춰
+  // 지도와 함께 커지게 한다. 최대 64배에선 화면상 2배 (사용자 요청 2026-08-05:
+  // "일정 크기 이상에선 가만히 냅둬서 더 크게 볼 수 있게" → "더더 동결을 늦게 더 확대되게").
+  // 8배 동결은 핀이 과대, 12배·16배도 이르다는 피드백 → 32배 동결 + 최대 64배로 확정.
+  const decoScale = Math.max(scaleFactor, 1 / 32);
   // 시군구 경계 그물망은 기본 배율에서 감춤(선거지도 느낌 제거) → 확대할수록 서서히 나타남.
   // 수도권처럼 작은 시·구가 밀집한 곳이 뭉쳐 보이지 않게 시작을 늦추고 상한을 낮게.
   const detail = Math.max(0, Math.min(1, (1 / scaleFactor - 2) / 2.5));
@@ -562,7 +562,7 @@ function SpotOverlay({
 }: {
   toXY: (lng: number, lat: number) => [number, number];
   onSelectRecord?: (recordId: string) => void;
-  /** 줌 배율 보정 — 16배까지는 화면상 일정, 그 너머는 고정값이 와서 지도와 함께 커진다 */
+  /** 줌 배율 보정 — 32배까지는 화면상 일정, 그 너머는 고정값이 와서 지도와 함께 커진다 */
   scaleFactor: number;
   /** 핀 모양 (도화지 꾸미기) */
   pin: string;
@@ -608,7 +608,7 @@ function SpotOverlay({
                 <title>{p.s.name}</title>
                 <PinShape style={pin} x={p.xy[0]} y={p.xy[1]} r={r} color={color} sf={scaleFactor} />
                 {showLabels && (
-                  // 종이색 테두리 글자 — 경계선 위에서도 읽히게 (16배 너머는 지도와 함께 커짐)
+                  // 종이색 테두리 글자 — 경계선 위에서도 읽히게 (32배 너머는 지도와 함께 커짐)
                   <text
                     x={p.xy[0]}
                     y={p.xy[1] + 18 * scaleFactor}
